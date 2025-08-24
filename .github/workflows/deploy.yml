@@ -8,18 +8,23 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      # 1. Клонируем репозиторий
+      - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2. Устанавливаем Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
 
+      # 3. Устанавливаем зависимости
       - name: Install dependencies
         run: npm ci
 
+      # 4. Копируем файлы на сервер
       - name: Copy files to server
         uses: appleboy/scp-action@master
         with:
@@ -28,8 +33,16 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           source: "."
           target: "/home/root/bot-project"
+          rm: false  # не удаляем старые файлы, чтобы CI не ломал PM2
 
+      # 5. Перезапускаем бота через PM2
       - name: Restart bot
-        run: |
-          ssh -i ${{ secrets.SERVER_SSH_KEY }} ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-          "cd /home/root/bot-project && pm2 reload tigran-food-bot"
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /home/root/bot-project
+            npm install --production
+            pm2 reload tigran-food-bot || pm2 start bot.js --name tigran-food-bot
