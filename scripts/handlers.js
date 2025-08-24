@@ -1,5 +1,5 @@
 // handlers.js
-import { POINTS, REMINDERS } from "./reports.js";
+import { POINTS, REMINDERS } from "../reports.js";
 import { getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
 import { scheduleReminders } from "./reminders.js";
 
