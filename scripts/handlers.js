@@ -170,6 +170,7 @@ export function handleMessage(bot, msg) {
   const state = userState[chatId];
   if (!state) return;
 
+  // --- Проверка пароля ---
   if (state.step === "enter_password") {
     if (msg.text === POINTS[state.point].password) {
       state.verified = true;
@@ -184,19 +185,43 @@ export function handleMessage(bot, msg) {
     return;
   }
 
+  // --- Сбор контента в отчет ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
-    let item = state.reportBuffer.find(i => i.from.id === msg.from.id && i.reminder === state.lastReminder && !i.sent);
+
+    // --- Найти item по текущему отчету и пользователю ---
+    let item = state.reportBuffer.find(
+      i => i.from.id === msg.from.id && i.reminder === state.lastReminder && !i.sent
+    );
+
     if (!item) {
-      item = { from: msg.from, reminder: state.lastReminder, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
+      item = { from: msg.from, reminder: state.lastReminder, text: null, photo: [], video: [], sent: false };
       state.reportBuffer.push(item);
-    } else if (msg.text || msg.caption) {
-      item.text = (item.text ? item.text + "\n" : "") + (msg.text || msg.caption);
     }
 
-    if (msg.photo) msg.photo.forEach(f => { if (!item.photo.includes(f.file_id)) item.photo.push(f.file_id); });
-    if (msg.video && msg.video.file_id) if (!item.video.includes(msg.video.file_id)) item.video.push(msg.video.file_id);
+    // --- Добавляем текст/подпись ---
+    if (msg.text || msg.caption) {
+      item.text = item.text ? item.text + "\n" : "";
+      item.text += msg.text || msg.caption;
+    }
 
+    // --- Добавляем фото без дублирования ---
+    if (msg.photo && msg.photo.length > 0) {
+      // Telegram присылает массив с разными размерами, берем последний (самый большой)
+      const largestPhotoId = msg.photo[msg.photo.length - 1].file_id;
+      if (!item.photo.includes(largestPhotoId)) {
+        item.photo.push(largestPhotoId);
+      }
+    }
+
+    // --- Добавляем видео без дублирования ---
+    if (msg.video && msg.video.file_id) {
+      if (!item.video.includes(msg.video.file_id)) {
+        item.video.push(msg.video.file_id);
+      }
+    }
+
+    // --- Уведомляем один раз ---
     if (!state._contentAdded) {
       state._contentAdded = true;
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
@@ -204,3 +229,4 @@ export function handleMessage(bot, msg) {
     }
   }
 }
+
