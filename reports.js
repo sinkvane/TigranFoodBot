@@ -12,7 +12,7 @@ export const POINTS = {
 };
 const MANY = "10 18 * * *";
 const ONE = "05 18 * * *";
-const TWO = "28 18 * * *";
+const TWO = "38 18 * * *";
 const THREE = "07 18 * * *";
 const FIVE = "08 18 * * *";
 
