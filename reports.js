@@ -10,10 +10,10 @@ export const POINTS = {
   "ул. Бекхожина 1/1": { password: process.env.POINT_BEKHOZHINA_1_1, tz: "KZ", type: "24h" },
   "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
 };
-const MANY = "45 22 * * *";
-const ONE = "43 22 * * *";
-const TWO = "43 22 * * *";
-const THREE = "44 22 * * *";
+const MANY = "50 22 * * *";
+const ONE = "46 22 * * *";
+const TWO = "46 22 * * *";
+const THREE = "48 22 * * *";
 const FIVE = "16 22 * * *";
 
 export const REMINDERS = [

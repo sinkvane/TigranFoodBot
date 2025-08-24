@@ -10,11 +10,8 @@ export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Отфильтруем отчёты, которые ещё не были выданы
-  const unissuedReports = state.pendingReminders.filter(r => r !== state.lastReminder);
-
-  if (unissuedReports.length === 0 && state.pendingReminders.length === 1) {
-    // Только один отчёт в очереди, и он ещё не показывался текстом
+  // Если есть только один отчёт и он ещё не показывался
+  if (state.pendingReminders.length === 1 && !state.lastReminder) {
     const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
     if (!reminder) return;
 
@@ -26,7 +23,7 @@ export function sendPendingReports(bot, chatId) {
     return;
   }
 
-  // Иначе показываем все pendingReminders списком кнопок
+  // Иначе формируем одно сообщение со всеми pendingReminders кнопками
   const buttons = state.pendingReminders.map(r => {
     const rem = REMINDERS.find(rem => rem.name === r);
     if (!rem) return null;
@@ -34,9 +31,23 @@ export function sendPendingReports(bot, chatId) {
   }).filter(Boolean);
 
   if (buttons.length > 0) {
-    bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
-      reply_markup: { inline_keyboard: buttons }
-    });
+    // Чтобы не отправлять несколько сообщений подряд, очищаем таймер
+    if (state._pendingMessageId) {
+      bot.editMessageText("Есть новые отчеты, выберите один для отправки:", {
+        chat_id: chatId,
+        message_id: state._pendingMessageId,
+        reply_markup: { inline_keyboard: buttons }
+      }).catch(() => {
+        // если редактировать не удалось (сообщение удалено), отправляем новое
+        bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
+          reply_markup: { inline_keyboard: buttons }
+        }).then(msg => state._pendingMessageId = msg.message_id);
+      });
+    } else {
+      bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
+        reply_markup: { inline_keyboard: buttons }
+      }).then(msg => state._pendingMessageId = msg.message_id);
+    }
 
     log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
   }
