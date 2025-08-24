@@ -16,6 +16,18 @@ export function handleStart(bot, msg) {
   });
 }
 
+export function handleEnd(bot, msg) {
+  const chatId = msg.chat.id;
+  const state = userState[chatId];
+  if (!state) return;
+
+  state.verified = false;
+  state.lastReminder = null;
+  state.pendingReminders = [];
+  bot.sendMessage(chatId, "✅ Смена завершена. Вы больше не будете получать напоминания до следующего запуска /start.");
+  log(`Пользователь ${chatId} завершил смену.`);
+}
+
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
