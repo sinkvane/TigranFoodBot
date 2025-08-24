@@ -52,6 +52,8 @@ export function handleEnd(bot, msg) {
   state.verified = false;
   state.step = null;
   state.lastReminder = null;
+  state._lastMsgId = null;
+  state._contentAdded = false;
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
   log(`Пользователь ${chatId} завершил смену с помощью /end`);
@@ -79,7 +81,8 @@ export function handleCallback(bot, query) {
       reportBuffer: [],
       lastReminder: null,
       reminderTimer: null,
-      _lastMsgId: null
+      _lastMsgId: null,
+      _contentAdded: false
     };
     userState[chatId] = state;
 
@@ -118,7 +121,7 @@ export function handleCallback(bot, query) {
       return;
     }
 
-    // Формируем текст с заголовком + все тексты
+    // --- Формируем текст отчета ---
     let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
     state.reportBuffer.forEach(item => {
       if (item.text) {
@@ -141,13 +144,16 @@ export function handleCallback(bot, query) {
         }
       });
 
-      if (mediaGroup.length > 0) {
-        await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
+      // --- Отправка в чанках по 10 ---
+      for (let i = 0; i < mediaGroup.length; i += 10) {
+        await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup.slice(i, i + 10));
       }
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
       state.reportBuffer = [];
       state.lastReminder = null;
+      state._lastMsgId = null;
+      state._contentAdded = false;
 
       // --- Проверка оставшихся отчетов ---
       if (state.pendingReminders.length > 0) {
@@ -192,16 +198,10 @@ export function handleMessage(bot, msg) {
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
-    const existingItem = state.reportBuffer.find(
-      item => item.from.id === msg.from.id && !item.sent
-    );
-
-    let item;
-    if (existingItem) {
-      item = existingItem;
-      // Обновляем текст если есть
+    let item = state.reportBuffer.find(i => i.from.id === msg.from.id && !i.sent);
+    if (item) {
       if (msg.text || msg.caption) {
-        item.text = (item.text ? item.text + "\n" : "") + msg.text || msg.caption;
+        item.text = (item.text ? item.text + "\n" : "") + (msg.text || msg.caption);
       }
     } else {
       item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
@@ -218,9 +218,9 @@ export function handleMessage(bot, msg) {
       if (!item.video.includes(msg.video.file_id)) item.video.push(msg.video.file_id);
     }
 
-    // --- Один раз отправляем сообщение пользователю о добавлении контента ---
-    if (!state._lastMsgId || state._lastMsgId !== msg.message_id) {
-      state._lastMsgId = msg.message_id;
+    // --- Один раз уведомляем пользователя ---
+    if (!state._contentAdded) {
+      state._contentAdded = true;
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
       log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
     }
