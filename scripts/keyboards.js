@@ -17,3 +17,13 @@ export function getEndKeyboard() {
     } 
   };
 }
+
+export function getFinishReportKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ Завершить отчет", callback_data: "finish_report" }]
+      ]
+    }
+  };
+}

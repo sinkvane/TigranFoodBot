@@ -1,27 +1,11 @@
 import { POINTS, REMINDERS } from "../reports.js";
 import { config } from "../config.js";
 import { log } from "./logger.js";
-import { getStartKeyboard, getEndKeyboard } from "./keyboards.js";
+import { getStartKeyboard, getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
 import { userState } from "./state.js";
-import { scheduleReminders, sendPendingReports } from "./reminders.js";
+import { scheduleReminders } from "./reminders.js";
 
 const { ADMIN_CHAT_ID } = config;
-
-function escapeMarkdownV2(text) {
-  if (!text) return "";
-  return text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, "\\$1");
-}
-
-// --- Кнопка "Завершить отчет" ---
-function finishReportKeyboard() {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "✅ Завершить отчет", callback_data: "finish_report" }]
-      ]
-    }
-  };
-}
 
 export function handleStart(bot, msg) {
   const chatId = msg.chat.id;
@@ -49,13 +33,16 @@ export function handleEnd(bot, msg) {
     return;
   }
 
-  if (state.reminderTimer) clearTimeout(state.reminderTimer);
+  if (state.reminderTimer) {
+    clearTimeout(state.reminderTimer);
+    state.reminderTimer = null;
+  }
 
   state.pendingReminders = [];
+  state.reportBuffer = [];
   state.verified = false;
   state.step = null;
   state.lastReminder = null;
-  state.reportBuffer = [];
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
   log(`Пользователь ${chatId} завершил смену с помощью /end`);
@@ -64,6 +51,7 @@ export function handleEnd(bot, msg) {
 export function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
+  const state = userState[chatId];
 
   if (data.startsWith("point:")) {
     const pointName = data.split(":")[1];
@@ -71,7 +59,7 @@ export function handleCallback(bot, query) {
 
     userState[chatId] = { step: "enter_password", point: pointName, verified: false, pendingReminders: [], reminderTimer: null, reportBuffer: [] };
     bot.sendMessage(chatId, `Введите пароль для ${pointName}:`);
-    log(`Пользователь ${chatId} выбрал точку "${pointName}" через inline кнопку`);
+    log(`Пользователь ${chatId} выбрал точку "${pointName}"`);
     bot.answerCallbackQuery(query.id);
     return;
   }
@@ -79,85 +67,65 @@ export function handleCallback(bot, query) {
   if (data.startsWith("report:")) {
     const key = data.split(":")[1];
     const reminder = REMINDERS.find(r => r.key === key);
-    if (!reminder || !userState[chatId]) {
+    if (!reminder || !state) {
       bot.answerCallbackQuery(query.id);
       return;
     }
 
-    const state = userState[chatId];
     state.lastReminder = reminder.name;
     state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
 
-    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте фото, видео или текст.`, finishReportKeyboard());
+    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте текст, фото или видео.`, getFinishReportKeyboard());
     bot.answerCallbackQuery(query.id);
     log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
   }
 
   if (data === "finish_report") {
-    handleFinishReport(bot, chatId);
-    bot.answerCallbackQuery(query.id, { text: "Отчет отправлен!" });
+    if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
+      bot.answerCallbackQuery(query.id, { text: "Нет контента для отправки." });
+      return;
+    }
+
+    // Заголовок
+    bot.sendMessage(ADMIN_CHAT_ID, `Отчет "${state.lastReminder}" с точки ${state.point}`);
+
+    // Пересылаем весь контент отдельными сообщениями
+    state.reportBuffer.forEach(item => {
+      const senderLink = item.from.username ? '@'+item.from.username : item.from.first_name;
+      if (item.text) bot.sendMessage(ADMIN_CHAT_ID, `${senderLink}: ${item.text}`);
+      if (item.photo) bot.sendPhoto(ADMIN_CHAT_ID, item.photo, { caption: `${senderLink}: Фото` });
+      if (item.video) bot.sendVideo(ADMIN_CHAT_ID, item.video, { caption: `${senderLink}: Видео` });
+    });
+
+    bot.sendMessage(chatId, "✅ Отчет отправлен.");
+    state.reportBuffer = [];
+    state.lastReminder = null;
+
+    if (state.pendingReminders.length > 0) {
+      bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
+      // Тут можно вызвать функцию sendPendingReports(bot, chatId)
+    }
+
+    bot.answerCallbackQuery(query.id);
+    log(`Пользователь ${chatId} завершил отчет "${state.lastReminder}"`);
   }
 }
 
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
-  if (!state) return;
+  if (!state || !state.verified || !state.lastReminder) return;
 
-  // --- Проверка пароля ---
-  if (state.step === "enter_password") {
-    if (msg.text === POINTS[state.point].password) {
-      state.verified = true;
-      state.step = "reports";
-      bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
-      log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
-      scheduleReminders(bot, chatId, state.point);
-    } else {
-      bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
-      log(`Неверный пароль для точки "${state.point}" пользователем ${chatId}`);
-    }
-    return;
-  }
+  // Сохраняем в буфер
+  if (!state.reportBuffer) state.reportBuffer = [];
 
-  // --- Добавляем сообщения в буфер отчета ---
-  if (state.verified && state.lastReminder) {
-    if (!state.reportBuffer) state.reportBuffer = [];
-    state.reportBuffer.push({
-      text: msg.text,
-      photo: msg.photo ? msg.photo[msg.photo.length - 1].file_id : null,
-      video: msg.video ? msg.video.file_id : null,
-      from: msg.from,
-    });
+  const item = { from: msg.from };
+  if (msg.text) item.text = msg.text;
+  if (msg.photo) item.photo = msg.photo[msg.photo.length - 1].file_id;
+  if (msg.video) item.video = msg.video.file_id;
 
-    bot.sendMessage(chatId, "✅ Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", finishReportKeyboard());
-  }
-}
+  state.reportBuffer.push(item);
 
-// --- Завершение отчета ---
-export function handleFinishReport(bot, chatId) {
-  const state = userState[chatId];
-  if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
-    bot.sendMessage(chatId, "⚠️ Нет данных для отправки.");
-    return;
-  }
-
-  let reportText = `Отчет "${escapeMarkdownV2(state.lastReminder)}" с точки ${escapeMarkdownV2(state.point)}\n\n`;
-
-  state.reportBuffer.forEach(item => {
-    const senderLink = `[${item.from.username ? '@'+item.from.username : escapeMarkdownV2(item.from.first_name)}](tg://user?id=${item.from.id})`;
-    if (item.text) reportText += `${senderLink}:\n${escapeMarkdownV2(item.text)}\n\n`;
-    if (item.photo) reportText += `${senderLink}: [Фото]\n\n`;
-    if (item.video) reportText += `${senderLink}: [Видео]\n\n`;
-  });
-
-  bot.sendMessage(ADMIN_CHAT_ID, reportText, { parse_mode: "MarkdownV2" })
-    .then(() => {
-      bot.sendMessage(chatId, "✅ Отчет отправлен!");
-      state.lastReminder = null;
-      state.reportBuffer = [];
-    })
-    .catch(err => {
-      console.error("Ошибка при отправке отчета:", err);
-      bot.sendMessage(chatId, "❌ Ошибка при отправке отчета.");
-    });
+  bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
+  log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
 }
