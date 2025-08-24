@@ -6,11 +6,12 @@ import { userState } from "./state.js";
 
 const { TIMEZONE } = config;
 
+// Отправка всех pending отчетов пользователю
 export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // --- выдаём следующий отчёт ---
+  // Если нет текущего отчета, выдаем следующий
   if (!state.lastReminder) {
     if (state.pendingReminders.length === 1) {
       const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
@@ -19,7 +20,7 @@ export function sendPendingReports(bot, chatId) {
       state.lastReminder = reminder.name;
       state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
 
-      // --- уведомление без кнопок и без "нажмите завершить" ---
+      // --- уведомление без кнопок и "нажмите завершить" ---
       bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
       log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
     } else if (state.pendingReminders.length > 1) {
@@ -39,6 +40,7 @@ export function sendPendingReports(bot, chatId) {
   }
 }
 
+// Планирование всех напоминаний
 export function scheduleReminders(bot, chatId, pointName) {
   const point = POINTS[pointName];
   if (!point) return;
@@ -59,15 +61,14 @@ export function scheduleReminders(bot, chatId, pointName) {
 
         if (!state.pendingReminders) state.pendingReminders = [];
 
-        // --- добавляем только если отчёт ещё не в очереди ---
-        if (!state.pendingReminders.includes(reminder.name)) {
-          state.pendingReminders.push(reminder.name);
-          log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
+        // --- добавляем новый отчет в очередь независимо от текущего ---
+        state.pendingReminders.push(reminder.name);
+        log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
+
+        // --- если нет текущего отчета, выдаем сразу ---
+        if (!state.lastReminder) {
+          sendPendingReports(bot, chatId);
         }
-
-        // --- уведомляем пользователя о всех накопленных отчетах, даже если текущий lastReminder занят ---
-        sendPendingReports(bot, chatId);
-
       }, { timezone: tz });
     }
   });
