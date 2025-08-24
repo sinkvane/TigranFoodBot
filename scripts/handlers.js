@@ -170,7 +170,6 @@ export function handleMessage(bot, msg) {
   const state = userState[chatId];
   if (!state) return;
 
-  // --- Проверка пароля ---
   if (state.step === "enter_password") {
     if (msg.text === POINTS[state.point].password) {
       state.verified = true;
@@ -185,11 +184,9 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // --- Сбор контента в отчет ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
-    // --- Найти item по текущему отчету и пользователю ---
     let item = state.reportBuffer.find(
       i => i.from.id === msg.from.id && i.reminder === state.lastReminder && !i.sent
     );
@@ -199,18 +196,22 @@ export function handleMessage(bot, msg) {
       state.reportBuffer.push(item);
     }
 
-    // --- Добавляем текст/подпись ---
+    // --- Флаг, сработал ли добавленный контент ---
+    let contentAddedNow = false;
+
+    // --- Добавляем текст ---
     if (msg.text || msg.caption) {
       item.text = item.text ? item.text + "\n" : "";
       item.text += msg.text || msg.caption;
+      contentAddedNow = true;
     }
 
     // --- Добавляем фото без дублирования ---
     if (msg.photo && msg.photo.length > 0) {
-      // Telegram присылает массив с разными размерами, берем последний (самый большой)
       const largestPhotoId = msg.photo[msg.photo.length - 1].file_id;
       if (!item.photo.includes(largestPhotoId)) {
         item.photo.push(largestPhotoId);
+        contentAddedNow = true;
       }
     }
 
@@ -218,15 +219,14 @@ export function handleMessage(bot, msg) {
     if (msg.video && msg.video.file_id) {
       if (!item.video.includes(msg.video.file_id)) {
         item.video.push(msg.video.file_id);
+        contentAddedNow = true;
       }
     }
 
-    // --- Уведомляем один раз ---
-    if (!state._contentAdded) {
-      state._contentAdded = true;
+    // --- Отправка уведомления, если что-то реально добавлено ---
+    if (contentAddedNow) {
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
       log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
     }
   }
 }
-
