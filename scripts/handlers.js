@@ -209,13 +209,13 @@ export function handleMessage(bot, msg) {
 
     // --- Найти item по текущему отчету и пользователю ---
     let item = state.reportBuffer.find(i => i.from.id === msg.from.id && i.reminder === state.lastReminder && !i.sent);
-    if (item) {
+    if (!item) {
+      item = { from: msg.from, reminder: state.lastReminder, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
+      state.reportBuffer.push(item);
+    } else {
       if (msg.text || msg.caption) {
         item.text = (item.text ? item.text + "\n" : "") + (msg.text || msg.caption);
       }
-    } else {
-      item = { from: msg.from, reminder: state.lastReminder, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
-      state.reportBuffer.push(item);
     }
 
     if (msg.photo && msg.photo.length > 0) {
@@ -224,7 +224,7 @@ export function handleMessage(bot, msg) {
       });
     }
 
-    if (msg.video) {
+    if (msg.video && msg.video.file_id) {
       if (!item.video.includes(msg.video.file_id)) item.video.push(msg.video.file_id);
     }
 
