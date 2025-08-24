@@ -14,6 +14,7 @@ const MANY = "45 17 * * *";
 const ONE = "30 17 * * *";
 const TWO = "35 17 * * *";
 const THREE = "40 17 * * *";
+const FIVE = "42 17 * * *";
 
 export const REMINDERS = [
   // Общие отчеты с корректным cron
@@ -65,5 +66,5 @@ export const REMINDERS = [
   { name: "Список необходимого товара", cron: "0 1 * * *", key: "needed_goods_01", pointType: "day9_01" },
 
   // Новые отчёты для круглосуточных точек
-  { name: "Список необходимого товара", cron: "0 7 * * *", key: "needed_goods_24h", pointType: "24h" },
+  { name: "Список необходимого товара", cron: FIVE, key: "needed_goods_24h", pointType: "24h" },
 ];
