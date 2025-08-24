@@ -1,4 +1,3 @@
-// handlers.js
 import { POINTS, REMINDERS } from "../reports.js";
 import { getEndKeyboard, getFinishReportKeyboard, getStartKeyboard } from "./keyboards.js";
 import { scheduleReminders } from "./reminders.js";
@@ -9,7 +8,15 @@ export const userState = {};
 // --- /start ---
 export function handleStart(bot, msg) {
   const chatId = msg.chat.id;
-  const state = userState[chatId] || { step: "enter_password", point: null, verified: false, pendingReminders: [] };
+  const state = userState[chatId] || {
+    step: "enter_password",
+    point: null,
+    verified: false,
+    pendingReminders: [],
+    reportBuffer: [],
+    lastReminder: null,
+    _lastMsgId: null
+  };
   userState[chatId] = state;
 
   const pointNames = Object.keys(POINTS).map(p => [{ text: p }]);
@@ -59,7 +66,10 @@ export function handleMessage(bot, msg) {
       state.step = "reports";
       state.pendingReminders = [];
       state.reportBuffer = [];
+      log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
+
+      // Сразу запускаем cron только после авторизации
       scheduleReminders(bot, chatId, state.point);
     } else if (state.point) {
       bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
@@ -116,7 +126,6 @@ export function handleCallback(bot, query) {
       return;
     }
 
-    // итоговый отчет
     console.log("Отчет пользователя:", state.point, state.lastReminder, state.reportBuffer);
     bot.sendMessage(chatId, `Отчет "${state.lastReminder}" завершён ✅`);
 
@@ -124,7 +133,7 @@ export function handleCallback(bot, query) {
     state.lastReminder = null;
     state._lastMsgId = null;
 
-    // предложить следующий из очереди, если есть
+    // предложить следующий из очереди
     if (state.pendingReminders.length > 0) {
       if (state.pendingReminders.length === 1) {
         const next = state.pendingReminders[0];

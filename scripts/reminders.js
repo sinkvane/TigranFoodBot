@@ -1,4 +1,3 @@
-// reminders.js
 import cron from "node-cron";
 import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
