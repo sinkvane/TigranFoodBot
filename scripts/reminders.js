@@ -1,46 +1,39 @@
-import cron from "node-cron";
 import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
 import { log } from "./logger.js";
 import { userState } from "./state.js";
+import cron from "node-cron";
 
 const { TIMEZONE } = config;
 
-// Отправка всех pending отчетов пользователю
 export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Если нет текущего отчета, выдаем следующий
-  if (!state.lastReminder) {
-    if (state.pendingReminders.length === 1) {
-      const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
-      if (!reminder) return;
+  // --- Если нет текущего отчёта, выдаём следующий ---
+  while (!state.lastReminder && state.pendingReminders.length > 0) {
+    const reminderName = state.pendingReminders.shift();
+    const reminder = REMINDERS.find(r => r.name === reminderName);
+    if (!reminder) continue;
 
-      state.lastReminder = reminder.name;
-      state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
+    state.lastReminder = reminder.name;
 
-      // --- уведомление без кнопок и "нажмите завершить" ---
+    // --- Если один отчёт, уведомление без кнопок ---
+    if (state.pendingReminders.length === 0) {
       bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
       log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
-    } else if (state.pendingReminders.length > 1) {
-      const buttons = state.pendingReminders.map(r => {
-        const rem = REMINDERS.find(rem => rem.name === r);
-        if (!rem) return null;
-        return [{ text: r, callback_data: `report:${rem.key}` }];
-      }).filter(Boolean);
-
-      if (buttons.length > 0) {
-        bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
-          reply_markup: { inline_keyboard: buttons }
-        });
-        log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
-      }
+    } else {
+      // --- Несколько отчётов, кнопки выбора ---
+      const buttons = [ [ { text: reminder.name, callback_data: `report:${reminder.key}` } ] ];
+      bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
+        reply_markup: { inline_keyboard: buttons }
+      });
+      log(`Несколько отчётов: первый "${reminder.name}" выдан пользователю ${chatId}`);
     }
   }
 }
 
-// Планирование всех напоминаний
+// --- Планирование всех напоминаний ---
 export function scheduleReminders(bot, chatId, pointName) {
   const point = POINTS[pointName];
   if (!point) return;
@@ -61,13 +54,15 @@ export function scheduleReminders(bot, chatId, pointName) {
 
         if (!state.pendingReminders) state.pendingReminders = [];
 
-        // --- добавляем новый отчет в очередь независимо от текущего ---
-        state.pendingReminders.push(reminder.name);
-        log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
+        // --- Добавляем в очередь, если ещё нет ---
+        if (!state.pendingReminders.includes(reminder.name)) {
+          state.pendingReminders.push(reminder.name);
+          log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
 
-        // --- если нет текущего отчета, выдаем сразу ---
-        if (!state.lastReminder) {
-          sendPendingReports(bot, chatId);
+          // --- Если нет текущего отчёта, выдаём сразу ---
+          if (!state.lastReminder) {
+            sendPendingReports(bot, chatId);
+          }
         }
       }, { timezone: tz });
     }
