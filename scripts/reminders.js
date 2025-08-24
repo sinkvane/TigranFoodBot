@@ -7,38 +7,33 @@ import { userState } from "./state.js";
 
 const { TIMEZONE } = config;
 
-// Отправка всех pendingReminders пользователю
 export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Один отчёт
-  if (!state.lastReminder && state.pendingReminders.length === 1) {
-    const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
-    if (reminder) {
-      state.lastReminder = reminder.name;
-      state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
-      bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст. Когда закончите, нажмите «Завершить отчет».`);
-      log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
-    }
-    return;
-  }
-
-  // Несколько отчётов — кнопки
-  if (!state.lastReminder && state.pendingReminders.length > 1) {
-    const buttons = state.pendingReminders
-      .map(r => {
+  // Если нет текущего отчета, выдаем следующий
+  if (!state.lastReminder) {
+    if (state.pendingReminders.length === 1) {
+      const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
+      if (reminder) {
+        state.lastReminder = reminder.name;
+        state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
+        bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст. Когда закончите, нажмите «Завершить отчет».`);
+        log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
+      }
+    } else if (state.pendingReminders.length > 1) {
+      const buttons = state.pendingReminders.map(r => {
         const rem = REMINDERS.find(rem => rem.name === r);
         if (!rem) return null;
         return [{ text: r, callback_data: `report:${rem.key}` }];
-      })
-      .filter(Boolean);
+      }).filter(Boolean);
 
-    if (buttons.length > 0) {
-      bot.sendMessage(chatId, "🔔 Поступили оставшиеся отчеты, выберите один для отправки:", {
-        reply_markup: { inline_keyboard: buttons }
-      });
-      log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      if (buttons.length > 0) {
+        bot.sendMessage(chatId, "🔔 Поступили оставшиеся отчеты, выберите один для отправки:", {
+          reply_markup: { inline_keyboard: buttons }
+        });
+        log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      }
     }
   }
 }

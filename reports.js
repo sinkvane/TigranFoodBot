@@ -11,9 +11,9 @@ export const POINTS = {
   "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
 };
 const MANY = "15 19 * * *";
-const ONE = "35 20 * * *";
-const TWO = "35 20 * * *";
-const THREE = "35 20 * * *";
+const ONE = "43 20 * * *";
+const TWO = "43 20 * * *";
+const THREE = "44 20 * * *";
 const FIVE = "12 19 * * *";
 
 export const REMINDERS = [

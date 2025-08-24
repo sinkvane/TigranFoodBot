@@ -166,7 +166,6 @@ export function handleCallback(bot, query) {
   }
 }
 
-// --- Сообщения пользователя ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
@@ -193,19 +192,37 @@ export function handleMessage(bot, msg) {
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
-    const item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [] };
+    const existingItem = state.reportBuffer.find(
+      item => item.from.id === msg.from.id && !item.sent
+    );
 
-    // --- Фото и видео ---
+    let item;
+    if (existingItem) {
+      item = existingItem;
+      // Обновляем текст если есть
+      if (msg.text || msg.caption) {
+        item.text = (item.text ? item.text + "\n" : "") + msg.text || msg.caption;
+      }
+    } else {
+      item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
+      state.reportBuffer.push(item);
+    }
+
     if (msg.photo && msg.photo.length > 0) {
-      item.photo.push(msg.photo[msg.photo.length - 1].file_id);
+      msg.photo.forEach(f => {
+        if (!item.photo.includes(f.file_id)) item.photo.push(f.file_id);
+      });
     }
+
     if (msg.video) {
-      item.video.push(msg.video.file_id);
+      if (!item.video.includes(msg.video.file_id)) item.video.push(msg.video.file_id);
     }
 
-    state.reportBuffer.push(item);
-
-    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
-    log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
+    // --- Один раз отправляем сообщение пользователю о добавлении контента ---
+    if (!state._lastMsgId || state._lastMsgId !== msg.message_id) {
+      state._lastMsgId = msg.message_id;
+      bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
+      log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
+    }
   }
 }
