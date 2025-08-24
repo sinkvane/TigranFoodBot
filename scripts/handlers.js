@@ -35,13 +35,16 @@ export function handleEnd(bot, msg) {
     return;
   }
 
-  state.verified = false;
-  state.step = null;
-  state.point = null;
-  state.lastReminder = null;
-  state.reportBuffer = [];
-  state.pendingReminders = [];
-  state._lastMsgId = null;
+  // сброс всех данных
+  Object.assign(state, {
+    verified: false,
+    step: null,
+    point: null,
+    lastReminder: null,
+    reportBuffer: [],
+    pendingReminders: [],
+    _lastMsgId: null
+  });
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
   log(`Пользователь ${chatId} завершил смену`);
@@ -55,7 +58,6 @@ export function handleMessage(bot, msg) {
 
   // === Ввод пароля / выбор точки ===
   if (state.step === "enter_password") {
-    // если точка ещё не выбрана
     if (!state.point) {
       const point = Object.keys(POINTS).find(p => p === msg.text);
       if (point) {
@@ -68,7 +70,6 @@ export function handleMessage(bot, msg) {
       }
     }
 
-    // проверка пароля
     if (msg.text === POINTS[state.point].password) {
       state.verified = true;
       state.step = "reports";
@@ -85,23 +86,13 @@ export function handleMessage(bot, msg) {
 
   // === Сбор отчёта ===
   if (state.verified && state.lastReminder) {
-    if (!state.reportBuffer) state.reportBuffer = [];
-
     const item = { from: msg.from, text: msg.caption || msg.text || null, photo: [], video: [] };
 
-    // фото: берём только самое большое
-    if (msg.photo && msg.photo.length > 0) {
-      item.photo.push(msg.photo[msg.photo.length - 1].file_id);
-    }
-
-    // видео
-    if (msg.video) {
-      item.video.push(msg.video.file_id);
-    }
+    if (msg.photo && msg.photo.length > 0) item.photo.push(msg.photo[msg.photo.length - 1].file_id);
+    if (msg.video) item.video.push(msg.video.file_id);
 
     state.reportBuffer.push(item);
 
-    // отвечаем один раз
     if (!state._lastMsgId || state._lastMsgId !== msg.message_id) {
       state._lastMsgId = msg.message_id;
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
@@ -118,7 +109,9 @@ export function handleCallback(bot, query) {
   const data = query.data;
 
   if (data.startsWith("report:")) {
-    const reminderName = data.split(":")[1];
+    const reminderName = REMINDERS.find(r => r.key === data.split(":")[1])?.name;
+    if (!reminderName) return;
+
     state.lastReminder = reminderName;
     state.reportBuffer = [];
     state.pendingReminders = state.pendingReminders.filter(r => r !== reminderName);
@@ -132,7 +125,6 @@ export function handleCallback(bot, query) {
       return;
     }
 
-    // итоговый отчет
     console.log("Отчет пользователя:", state.point, state.lastReminder, state.reportBuffer);
     bot.sendMessage(chatId, `Отчет "${state.lastReminder}" завершён ✅`);
 
@@ -140,7 +132,6 @@ export function handleCallback(bot, query) {
     state.lastReminder = null;
     state._lastMsgId = null;
 
-    // предложить следующий из очереди, если есть
     if (state.pendingReminders.length > 0) {
       if (state.pendingReminders.length === 1) {
         const next = state.pendingReminders[0];
@@ -148,10 +139,8 @@ export function handleCallback(bot, query) {
         state.pendingReminders = [];
         bot.sendMessage(chatId, `Следующий отчёт: "${next}". Отправьте фото/видео и нажмите «Завершить отчет».`, getFinishReportKeyboard());
       } else {
-        const buttons = state.pendingReminders.map((r) => [{ text: r, callback_data: `report:${r}` }]);
-        bot.sendMessage(chatId, "У вас остались непройденные отчёты:", {
-          reply_markup: { inline_keyboard: buttons },
-        });
+        const buttons = state.pendingReminders.map(r => [{ text: r, callback_data: `report:${REMINDERS.find(rem => rem.name === r)?.key}` }]);
+        bot.sendMessage(chatId, "У вас остались непройденные отчёты:", { reply_markup: { inline_keyboard: buttons } });
       }
     }
   }
