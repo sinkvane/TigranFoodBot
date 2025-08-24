@@ -1,4 +1,3 @@
-// reminders.js
 import cron from "node-cron";
 import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
@@ -29,7 +28,7 @@ export function sendPendingReports(bot, chatId) {
       }).filter(Boolean);
 
       if (buttons.length > 0) {
-        bot.sendMessage(chatId, "🔔 Поступили оставшиеся отчеты, выберите один для отправки:", {
+        bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
           reply_markup: { inline_keyboard: buttons }
         });
         log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
@@ -49,27 +48,33 @@ export function scheduleReminders(bot, chatId, pointName) {
   REMINDERS.forEach(reminder => {
     if (reminder.pointType && reminder.pointType !== pointType) return;
 
-    cron.schedule(reminder.cron, () => {
-      const state = userState[chatId];
-      if (!state || !state.verified) return;
+    // Создаём только один cron на конкретного пользователя
+    const cronKey = `${chatId}_${reminder.key}`;
+    if (!userState[cronKey]) {
+      userState[cronKey] = true;
 
-      if (!state.pendingReminders) state.pendingReminders = [];
+      cron.schedule(reminder.cron, () => {
+        const state = userState[chatId];
+        if (!state || !state.verified) return;
 
-      // Добавляем в очередь, не теряя прошлые
-      if (!state.pendingReminders.includes(reminder.name)) {
-        state.pendingReminders.push(reminder.name);
-        log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
-      }
+        if (!state.pendingReminders) state.pendingReminders = [];
 
-      // Если нет текущего отчёта, выдаём сразу
-      if (!state.lastReminder) {
-        if (!state.reminderTimer) {
-          state.reminderTimer = setTimeout(() => {
-            sendPendingReports(bot, chatId);
-            state.reminderTimer = null;
-          }, 1000);
+        // Добавляем в очередь, если ещё нет
+        if (!state.pendingReminders.includes(reminder.name)) {
+          state.pendingReminders.push(reminder.name);
+          log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
         }
-      }
-    }, { timezone: tz });
+
+        // Если нет текущего отчёта, выдаём сразу
+        if (!state.lastReminder) {
+          if (!state.reminderTimer) {
+            state.reminderTimer = setTimeout(() => {
+              sendPendingReports(bot, chatId);
+              state.reminderTimer = null;
+            }, 1000);
+          }
+        }
+      }, { timezone: tz });
+    }
   });
 }

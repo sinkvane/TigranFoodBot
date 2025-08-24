@@ -121,9 +121,15 @@ export function handleCallback(bot, query) {
       return;
     }
 
+    const itemsForReport = state.reportBuffer.filter(i => i.reminder === state.lastReminder && !i.sent);
+    if (itemsForReport.length === 0) {
+      bot.answerCallbackQuery(query.id, { text: "Нет контента для отправки." });
+      return;
+    }
+
     // --- Формируем текст отчета ---
     let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
-    state.reportBuffer.forEach(item => {
+    itemsForReport.forEach(item => {
       if (item.text) {
         const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
         combinedText += `${senderLink}: ${item.text}\n`;
@@ -133,7 +139,7 @@ export function handleCallback(bot, query) {
     bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(async () => {
       // --- Сбор фото и видео ---
       const mediaGroup = [];
-      state.reportBuffer.forEach(item => {
+      itemsForReport.forEach(item => {
         const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
 
         if (item.photo && item.photo.length > 0) {
@@ -142,6 +148,8 @@ export function handleCallback(bot, query) {
         if (item.video && item.video.length > 0) {
           item.video.forEach(f => mediaGroup.push({ type: "video", media: f, caption: item.text || `${senderLink}: Видео` }));
         }
+
+        item.sent = true; // отмечаем как отправленное
       });
 
       // --- Отправка в чанках по 10 ---
@@ -150,10 +158,6 @@ export function handleCallback(bot, query) {
       }
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
-      state.reportBuffer = [];
-      state.lastReminder = null;
-      state._lastMsgId = null;
-      state._contentAdded = false;
 
       // --- Проверка оставшихся отчетов ---
       if (state.pendingReminders.length > 0) {
@@ -165,6 +169,10 @@ export function handleCallback(bot, query) {
           reply_markup: { inline_keyboard: buttons }
         });
       }
+
+      state.lastReminder = null;
+      state._lastMsgId = null;
+      state._contentAdded = false;
     });
 
     bot.answerCallbackQuery(query.id);
@@ -172,6 +180,7 @@ export function handleCallback(bot, query) {
   }
 }
 
+// --- Сообщения пользователя ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
@@ -198,13 +207,14 @@ export function handleMessage(bot, msg) {
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
-    let item = state.reportBuffer.find(i => i.from.id === msg.from.id && !i.sent);
+    // --- Найти item по текущему отчету и пользователю ---
+    let item = state.reportBuffer.find(i => i.from.id === msg.from.id && i.reminder === state.lastReminder && !i.sent);
     if (item) {
       if (msg.text || msg.caption) {
         item.text = (item.text ? item.text + "\n" : "") + (msg.text || msg.caption);
       }
     } else {
-      item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
+      item = { from: msg.from, reminder: state.lastReminder, text: msg.text || msg.caption || null, photo: [], video: [], sent: false };
       state.reportBuffer.push(item);
     }
 
