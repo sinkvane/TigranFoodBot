@@ -1,3 +1,4 @@
+// reminders.js
 import cron from "node-cron";
 import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
@@ -6,66 +7,39 @@ import { userState } from "./state.js";
 
 const { TIMEZONE } = config;
 
-// Небольшая функция склонения для сообщений
-function declension(count) {
-  if (count % 10 === 1 && count % 100 !== 11) return "отчет";
-  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) return "отчета";
-  return "отчетов";
-}
-
 export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Дедупликация на всякий случай
-  state.pendingReminders = [...new Set(state.pendingReminders)];
-
-  const count = state.pendingReminders.length;
-
-  // Если уже есть активный отчёт — ничего не перетираем, предлагаем кнопки выбора
-  const buttons = state.pendingReminders
-    .map((rName) => {
-      const rem = REMINDERS.find((rem) => rem.name === rName);
-      if (!rem) return null;
-      return [{ text: rName, callback_data: `report:${rem.key}` }];
-    })
-    .filter(Boolean);
-
-  if (state.lastReminder) {
-    if (buttons.length > 0) {
-      bot.sendMessage(
-        chatId,
-        `🔔 У вас ещё ${count} незавершенных ${declension(count)}. Выберите один для отправки:`,
-        { reply_markup: { inline_keyboard: buttons } }
-      );
-      log(`Пользователю ${chatId} показан список оставшихся отчётов (активный уже есть).`);
-    }
-    return;
-  }
-
-  // Авто-активируем только если активного отчёта нет
-  if (count === 1) {
-    const reminder = REMINDERS.find((rem) => rem.name === state.pendingReminders[0]);
+  // если в очереди один отчёт — запускаем сразу
+  if (!state.lastReminder && state.pendingReminders.length === 1) {
+    const reminder = REMINDERS.find(rem => rem.name === state.pendingReminders[0]);
     if (reminder) {
       state.lastReminder = reminder.name;
-      state.pendingReminders = state.pendingReminders.filter((r) => r !== reminder.name);
+      state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
       bot.sendMessage(
         chatId,
-        `🔔 Поступил отчет: "${reminder.name}". Отправьте текст, фото или видео. Когда закончите, нажмите «Завершить отчет».`
+        `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст. Когда закончите, нажмите «Завершить отчет».`
       );
       log(`Один отчёт "${reminder.name}" сразу выдан пользователю ${chatId}`);
     }
     return;
   }
 
-  // Несколько и активного нет — показываем кнопки выбора
-  if (buttons.length > 0) {
-    bot.sendMessage(
-      chatId,
-      `🔔 Поступили ${count} ${declension(count)}. Выберите один для отправки:`,
-      { reply_markup: { inline_keyboard: buttons } }
-    );
-    log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+  // если в очереди несколько — показываем меню выбора
+  if (!state.lastReminder && state.pendingReminders.length > 1) {
+    const buttons = state.pendingReminders.map(r => {
+      const rem = REMINDERS.find(rem => rem.name === r);
+      if (!rem) return null;
+      return [{ text: r, callback_data: `report:${rem.name}` }];
+    }).filter(Boolean);
+
+    if (buttons.length > 0) {
+      bot.sendMessage(chatId, "🔔 Поступили оставшиеся отчеты, выберите один для отправки:", {
+        reply_markup: { inline_keyboard: buttons }
+      });
+      log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+    }
   }
 }
 
@@ -74,8 +48,7 @@ export function scheduleReminders(bot, chatId, pointName) {
   const tz = TIMEZONE[tzKey];
   const pointType = POINTS[pointName].type;
 
-  REMINDERS.forEach((reminder) => {
-    // Если напоминание для другого типа точки — пропускаем
+  REMINDERS.forEach(reminder => {
     if (reminder.pointType && reminder.pointType !== pointType) return;
 
     cron.schedule(
@@ -86,20 +59,20 @@ export function scheduleReminders(bot, chatId, pointName) {
 
         if (!state.pendingReminders) state.pendingReminders = [];
 
-        // Добавляем в очередь, но не дублируем
+        // кладём в очередь всегда
         if (!state.pendingReminders.includes(reminder.name)) {
           state.pendingReminders.push(reminder.name);
+          log(`Добавлен в очередь отчёт "${reminder.name}" для ${chatId}`);
         }
 
-        // Небольшая "склейка" триггеров, чтобы не слать много сообщений подряд
-        if (!state.reminderTimer) {
-          state.reminderTimer = setTimeout(() => {
-            try {
+        // если сейчас никакой отчёт не активен — сразу запускаем выдачу
+        if (!state.lastReminder) {
+          if (!state.reminderTimer) {
+            state.reminderTimer = setTimeout(() => {
               sendPendingReports(bot, chatId);
-            } finally {
               state.reminderTimer = null;
-            }
-          }, 300); // 300мс хватает, можно оставить 1000мс если нравится
+            }, 1000);
+          }
         }
       },
       { timezone: tz }
