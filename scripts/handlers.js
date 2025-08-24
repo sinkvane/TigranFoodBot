@@ -3,7 +3,7 @@ import { config } from "../config.js";
 import { log } from "./logger.js";
 import { getStartKeyboard, getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
 import { userState } from "./state.js";
-import { scheduleReminders } from "./reminders.js";
+import { scheduleReminders, sendPendingReports } from "./reminders.js";
 
 const { ADMIN_CHAT_ID } = config;
 
@@ -44,6 +44,7 @@ export function handleEnd(bot, msg) {
   state.lastReminder = null;
   state._lastMsgId = null;
   state._contentAdded = false;
+  state._pendingMessageId = null;
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
   log(`Пользователь ${chatId} завершил смену с помощью /end`);
@@ -69,7 +70,8 @@ export function handleCallback(bot, query) {
       reportBuffer: [],
       lastReminder: null,
       _lastMsgId: null,
-      _contentAdded: false
+      _contentAdded: false,
+      _pendingMessageId: null
     };
     userState[chatId] = state;
 
@@ -146,18 +148,14 @@ export function handleCallback(bot, query) {
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
 
-      if (state.pendingReminders.length > 0) {
-        const count = state.pendingReminders.length;
-        const word = declension(count);
-        const buttons = state.pendingReminders.map(rName => [{ text: rName, callback_data: `report:${REMINDERS.find(r => r.name === rName).key}` }]);
-        bot.sendMessage(chatId, `Есть еще ${count} незавершенных ${word}, выберите один для отправки:`, {
-          reply_markup: { inline_keyboard: buttons }
-        });
-      }
-
+      // --- После завершения отчета показываем все оставшиеся pendingReminders ---
       state.lastReminder = null;
       state._lastMsgId = null;
       state._contentAdded = false;
+
+      if (state.pendingReminders.length > 0) {
+        sendPendingReports(bot, chatId);
+      }
     });
 
     bot.answerCallbackQuery(query.id);
@@ -196,17 +194,14 @@ export function handleMessage(bot, msg) {
       state.reportBuffer.push(item);
     }
 
-    // --- Флаг, сработал ли добавленный контент ---
     let contentAddedNow = false;
 
-    // --- Добавляем текст или caption ---
     if (msg.text || msg.caption) {
       item.text = item.text ? item.text + "\n" : "";
       item.text += msg.text || msg.caption;
       contentAddedNow = true;
     }
 
-    // --- Добавляем фото без дублирования (берем максимальный размер) ---
     if (msg.photo && msg.photo.length > 0) {
       const largestPhotoId = msg.photo[msg.photo.length - 1].file_id;
       if (!item.photo.includes(largestPhotoId)) {
@@ -215,7 +210,6 @@ export function handleMessage(bot, msg) {
       }
     }
 
-    // --- Добавляем видео без дублирования ---
     if (msg.video && msg.video.file_id) {
       if (!item.video.includes(msg.video.file_id)) {
         item.video.push(msg.video.file_id);
@@ -223,7 +217,6 @@ export function handleMessage(bot, msg) {
       }
     }
 
-    // --- Отправка уведомления только если реально добавлен контент ---
     if (contentAddedNow) {
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
       log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);

@@ -12,22 +12,10 @@ export function sendPendingReports(bot, chatId) {
 
   // Если пользователь не начал работу с отчетом
   if (!state.lastReminder) {
-    // --- Удаляем предыдущее уведомление, если оно есть ---
+    // Удаляем старое сообщение, если оно есть
     if (state._pendingMessageId) {
       bot.deleteMessage(chatId, state._pendingMessageId).catch(() => {});
       state._pendingMessageId = null;
-    }
-
-    if (state.pendingReminders.length === 1) {
-      const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
-      if (!reminder) return;
-
-      state.lastReminder = reminder.name;
-      state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
-
-      bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
-      log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId} текстом`);
-      return;
     }
 
     // --- Несколько отчетов, формируем кнопки ---
@@ -38,11 +26,12 @@ export function sendPendingReports(bot, chatId) {
     }).filter(Boolean);
 
     if (buttons.length > 0) {
-      bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
+      bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
         reply_markup: { inline_keyboard: buttons }
-      }).then(msg => state._pendingMessageId = msg.message_id);
-
-      log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      }).then(msg => {
+        state._pendingMessageId = msg.message_id;
+      });
+      log(`[REMINDERS] Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
     }
   }
 }
@@ -67,12 +56,14 @@ export function scheduleReminders(bot, chatId, pointName) {
 
         if (!state.pendingReminders) state.pendingReminders = [];
 
-        // Добавляем новый отчёт в очередь, даже если первый ещё не выбран
+        // Добавляем новый отчёт в очередь, даже если предыдущие ещё не выбраны
         state.pendingReminders.push(reminder.name);
         log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
 
-        // Отправляем уведомления о всех pending отчётах
-        sendPendingReports(bot, chatId);
+        // Если пользователь не начал работу с отчетом, обновляем уведомление
+        if (!state.lastReminder) {
+          sendPendingReports(bot, chatId);
+        }
       }, { timezone: tz });
     }
   });
