@@ -199,14 +199,14 @@ export function handleMessage(bot, msg) {
     // --- Флаг, сработал ли добавленный контент ---
     let contentAddedNow = false;
 
-    // --- Добавляем текст ---
+    // --- Добавляем текст или caption ---
     if (msg.text || msg.caption) {
       item.text = item.text ? item.text + "\n" : "";
       item.text += msg.text || msg.caption;
       contentAddedNow = true;
     }
 
-    // --- Добавляем фото без дублирования ---
+    // --- Добавляем фото без дублирования (берем максимальный размер) ---
     if (msg.photo && msg.photo.length > 0) {
       const largestPhotoId = msg.photo[msg.photo.length - 1].file_id;
       if (!item.photo.includes(largestPhotoId)) {
@@ -223,7 +223,7 @@ export function handleMessage(bot, msg) {
       }
     }
 
-    // --- Отправка уведомления, если что-то реально добавлено ---
+    // --- Отправка уведомления только если реально добавлен контент ---
     if (contentAddedNow) {
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
       log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
