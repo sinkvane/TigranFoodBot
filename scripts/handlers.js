@@ -7,6 +7,14 @@ import { scheduleReminders } from "./reminders.js";
 
 const { ADMIN_CHAT_ID } = config;
 
+// --- Функция склонения слова "отчет" ---
+function declension(count) {
+  if (count % 10 === 1 && count % 100 !== 11) return "отчет";
+  if ([2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100)) return "отчета";
+  return "отчетов";
+}
+
+// --- /start ---
 export function handleStart(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
@@ -24,6 +32,7 @@ export function handleStart(bot, msg) {
   log(`Пользователь ${chatId} вызвал /start`);
 }
 
+// --- /end ---
 export function handleEnd(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
@@ -48,6 +57,7 @@ export function handleEnd(bot, msg) {
   log(`Пользователь ${chatId} завершил смену с помощью /end`);
 }
 
+// --- Callback ---
 export function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -102,11 +112,11 @@ export function handleCallback(bot, query) {
       state.reportBuffer.forEach(item => {
         const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
 
-        if (item.photo) {
-          mediaGroup.push({ type: "photo", media: item.photo, caption: `${senderLink}: Фото` });
+        if (item.photo && item.photo.length > 0) {
+          item.photo.forEach(f => mediaGroup.push({ type: "photo", media: f, caption: item.text || `${senderLink}: Фото` }));
         }
-        if (item.video) {
-          mediaGroup.push({ type: "video", media: item.video, caption: `${senderLink}: Видео` });
+        if (item.video && item.video.length > 0) {
+          item.video.forEach(f => mediaGroup.push({ type: "video", media: f, caption: item.text || `${senderLink}: Видео` }));
         }
       });
 
@@ -118,8 +128,15 @@ export function handleCallback(bot, query) {
       state.reportBuffer = [];
       state.lastReminder = null;
 
+      // --- Проверка оставшихся отчетов ---
       if (state.pendingReminders.length > 0) {
-        bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
+        const count = state.pendingReminders.length;
+        const word = declension(count);
+
+        const buttons = state.pendingReminders.map(rName => [{ text: rName, callback_data: `report:${REMINDERS.find(r => r.name === rName).key}` }]);
+        bot.sendMessage(chatId, `Есть еще ${count} незавершенных ${word}, выберите один для отправки:`, {
+          reply_markup: { inline_keyboard: buttons }
+        });
       }
     });
 
@@ -128,15 +145,15 @@ export function handleCallback(bot, query) {
   }
 }
 
+// --- Сообщения пользователя ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
-  const text = msg.text;
   const state = userState[chatId];
   if (!state) return;
 
   // --- Проверка пароля ---
   if (state.step === "enter_password") {
-    if (text === POINTS[state.point].password) {
+    if (msg.text === POINTS[state.point].password) {
       state.verified = true;
       state.step = "reports";
 
@@ -155,10 +172,15 @@ export function handleMessage(bot, msg) {
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
-    const item = { from: msg.from };
-    if (msg.text) item.text = msg.text;
-    if (msg.photo) item.photo = msg.photo[msg.photo.length - 1].file_id;
-    if (msg.video) item.video = msg.video.file_id;
+    const item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [] };
+
+    // --- Фото и видео ---
+    if (msg.photo && msg.photo.length > 0) {
+      item.photo = msg.photo.map(p => p.file_id);
+    }
+    if (msg.video) {
+      item.video.push(msg.video.file_id);
+    }
 
     state.reportBuffer.push(item);
 
