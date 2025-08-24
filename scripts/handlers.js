@@ -1,3 +1,4 @@
+// handlers.js
 import { POINTS, REMINDERS } from "../reports.js";
 import { getEndKeyboard, getFinishReportKeyboard, getStartKeyboard } from "./keyboards.js";
 import { scheduleReminders } from "./reminders.js";
@@ -15,7 +16,7 @@ export function handleStart(bot, msg) {
     pendingReminders: [],
     reportBuffer: [],
     lastReminder: null,
-    _lastMsgId: null
+    _lastMsgId: null,
   };
   userState[chatId] = state;
 
@@ -46,32 +47,37 @@ export function handleEnd(bot, msg) {
   log(`Пользователь ${chatId} завершил смену`);
 }
 
-// --- обработка сообщений ---
+// --- handleMessage ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
   if (!state) return;
 
-  // === Ввод пароля ===
+  // === Ввод пароля / выбор точки ===
   if (state.step === "enter_password") {
-    const point = Object.keys(POINTS).find(p => p === msg.text);
-    if (point) {
-      state.point = point;
-      bot.sendMessage(chatId, `Введите пароль для ${point}:`);
-      return;
+    // если точка ещё не выбрана
+    if (!state.point) {
+      const point = Object.keys(POINTS).find(p => p === msg.text);
+      if (point) {
+        state.point = point;
+        bot.sendMessage(chatId, `Введите пароль для ${point}:`);
+        return;
+      } else {
+        bot.sendMessage(chatId, "Выберите точку из списка выше:");
+        return;
+      }
     }
 
-    if (state.point && msg.text === POINTS[state.point].password) {
+    // проверка пароля
+    if (msg.text === POINTS[state.point].password) {
       state.verified = true;
       state.step = "reports";
       state.pendingReminders = [];
       state.reportBuffer = [];
       log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
-
-      // Сразу запускаем cron только после авторизации
       scheduleReminders(bot, chatId, state.point);
-    } else if (state.point) {
+    } else {
       bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
     }
     return;
@@ -103,7 +109,7 @@ export function handleMessage(bot, msg) {
   }
 }
 
-// --- callback для кнопок ---
+// --- handleCallback ---
 export function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const state = userState[chatId];
@@ -126,6 +132,7 @@ export function handleCallback(bot, query) {
       return;
     }
 
+    // итоговый отчет
     console.log("Отчет пользователя:", state.point, state.lastReminder, state.reportBuffer);
     bot.sendMessage(chatId, `Отчет "${state.lastReminder}" завершён ✅`);
 
@@ -133,7 +140,7 @@ export function handleCallback(bot, query) {
     state.lastReminder = null;
     state._lastMsgId = null;
 
-    // предложить следующий из очереди
+    // предложить следующий из очереди, если есть
     if (state.pendingReminders.length > 0) {
       if (state.pendingReminders.length === 1) {
         const next = state.pendingReminders[0];
@@ -141,7 +148,7 @@ export function handleCallback(bot, query) {
         state.pendingReminders = [];
         bot.sendMessage(chatId, `Следующий отчёт: "${next}". Отправьте фото/видео и нажмите «Завершить отчет».`, getFinishReportKeyboard());
       } else {
-        const buttons = state.pendingReminders.map(r => [{ text: r, callback_data: `report:${r}` }]);
+        const buttons = state.pendingReminders.map((r) => [{ text: r, callback_data: `report:${r}` }]);
         bot.sendMessage(chatId, "У вас остались непройденные отчёты:", {
           reply_markup: { inline_keyboard: buttons },
         });
