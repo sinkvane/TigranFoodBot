@@ -176,7 +176,8 @@ export function handleMessage(bot, msg) {
 
     // --- Фото и видео ---
     if (msg.photo && msg.photo.length > 0) {
-      item.photo = msg.photo.map(p => p.file_id);
+      // сохраняем только последний элемент массива, чтобы не дублировать фото
+      item.photo.push(msg.photo[msg.photo.length - 1].file_id);
     }
     if (msg.video) {
       item.video.push(msg.video.file_id);
