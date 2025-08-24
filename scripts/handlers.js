@@ -1,4 +1,3 @@
-// handlers.js
 import { POINTS, REMINDERS } from "../reports.js";
 import { config } from "../config.js";
 import { log } from "./logger.js";
@@ -8,7 +7,7 @@ import { scheduleReminders } from "./reminders.js";
 
 const { ADMIN_CHAT_ID } = config;
 
-// --- Склонение "отчет" ---
+// --- Склонение слова "отчет" ---
 function declension(count) {
   if (count % 10 === 1 && count % 100 !== 11) return "отчет";
   if ([2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100)) return "отчета";
@@ -62,22 +61,41 @@ export function handleEnd(bot, msg) {
 export function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
-  const state = userState[chatId];
+  let state = userState[chatId];
 
-  if (!state) return;
-
+  // --- Выбор точки ---
   if (data.startsWith("point:")) {
     const pointName = data.split(":")[1];
-    if (!POINTS[pointName]) return;
+    if (!POINTS[pointName]) {
+      bot.answerCallbackQuery(query.id, { text: "Точка не найдена" });
+      return;
+    }
 
-    userState[chatId] = { step: "enter_password", point: pointName, verified: false, pendingReminders: [], reminderTimer: null, reportBuffer: [] };
-    bot.sendMessage(chatId, `Введите пароль для ${pointName}:`);
-    log(`Пользователь ${chatId} выбрал точку "${pointName}"`);
+    state = {
+      step: "enter_password",
+      point: pointName,
+      verified: false,
+      pendingReminders: [],
+      reportBuffer: [],
+      lastReminder: null,
+      reminderTimer: null,
+      _lastMsgId: null
+    };
+    userState[chatId] = state;
+
+    bot.sendMessage(chatId, `Введите пароль для точки: ${pointName}`);
     bot.answerCallbackQuery(query.id);
+    log(`Пользователь ${chatId} выбрал точку "${pointName}"`);
     return;
   }
 
+  // --- Выбор отчета ---
   if (data.startsWith("report:")) {
+    if (!state) {
+      bot.answerCallbackQuery(query.id);
+      return;
+    }
+
     const key = data.split(":")[1];
     const reminder = REMINDERS.find(r => r.key === key);
     if (!reminder) {
@@ -93,8 +111,9 @@ export function handleCallback(bot, query) {
     log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
   }
 
+  // --- Завершение отчета ---
   if (data === "finish_report") {
-    if (!state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
+    if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
       bot.answerCallbackQuery(query.id, { text: "Нет контента для отправки." });
       return;
     }
@@ -109,23 +128,28 @@ export function handleCallback(bot, query) {
     });
 
     bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(async () => {
-      // Медиа-группа фото/видео
+      // --- Сбор фото и видео ---
       const mediaGroup = [];
       state.reportBuffer.forEach(item => {
         const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
-        if (item.photo && item.photo.length > 0)
+
+        if (item.photo && item.photo.length > 0) {
           item.photo.forEach(f => mediaGroup.push({ type: "photo", media: f, caption: item.text || `${senderLink}: Фото` }));
-        if (item.video && item.video.length > 0)
+        }
+        if (item.video && item.video.length > 0) {
           item.video.forEach(f => mediaGroup.push({ type: "video", media: f, caption: item.text || `${senderLink}: Видео` }));
+        }
       });
 
-      if (mediaGroup.length > 0) await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
+      if (mediaGroup.length > 0) {
+        await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
+      }
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
       state.reportBuffer = [];
       state.lastReminder = null;
 
-      // Оставшиеся отчеты
+      // --- Проверка оставшихся отчетов ---
       if (state.pendingReminders.length > 0) {
         const count = state.pendingReminders.length;
         const word = declension(count);
@@ -142,19 +166,21 @@ export function handleCallback(bot, query) {
   }
 }
 
-// --- handleMessage ---
+// --- Сообщения пользователя ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
   if (!state) return;
 
-  // Проверка пароля
+  // --- Проверка пароля ---
   if (state.step === "enter_password") {
     if (msg.text === POINTS[state.point].password) {
       state.verified = true;
       state.step = "reports";
+
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
       log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
+
       scheduleReminders(bot, chatId, state.point);
     } else {
       bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
@@ -163,16 +189,23 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // Сбор контента
+  // --- Сбор контента в отчет ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
+
     const item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [] };
 
-    if (msg.photo && msg.photo.length > 0) item.photo.push(msg.photo[msg.photo.length - 1].file_id);
-    if (msg.video) item.video.push(msg.video.file_id);
+    // --- Фото и видео ---
+    if (msg.photo && msg.photo.length > 0) {
+      item.photo.push(msg.photo[msg.photo.length - 1].file_id);
+    }
+    if (msg.video) {
+      item.video.push(msg.video.file_id);
+    }
 
     state.reportBuffer.push(item);
-    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Отправить отчет».", getFinishReportKeyboard());
+
+    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
     log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
   }
 }
