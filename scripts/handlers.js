@@ -16,6 +16,25 @@ export function handleStart(bot, msg) {
   });
 }
 
+export function handleEnd(bot, msg) {
+  const chatId = msg.chat.id;
+  const state = userState[chatId];
+  if (!state || !state.verified) {
+    bot.sendMessage(chatId, "Смена не активна. Нажмите /start для начала смены.");
+    return;
+  }
+
+  state.verified = false;
+  state.step = null;
+  state.point = null;
+  state.lastReminder = null;
+  state.reportBuffer = [];
+  state.pendingReminders = [];
+  state._lastMsgId = null;
+
+  bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.");
+}
+
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
