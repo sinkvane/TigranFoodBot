@@ -47,7 +47,6 @@ export function scheduleReminders(bot, chatId, pointName) {
   const pointType = POINTS[pointName].type;
 
   REMINDERS.forEach(reminder => {
-    // проверяем pointType: если его нет → для всех точек, если есть → только для точек с таким типом
     if (reminder.pointType && reminder.pointType !== pointType) return;
 
     cron.schedule(

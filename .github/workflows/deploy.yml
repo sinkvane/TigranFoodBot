@@ -13,26 +13,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Deploy to server
+      - name: Deploy to server via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            # Сделаем папку безопасной для git
-            git config --global --add safe.directory /home/root/bot-project
-
-            # Переходим в папку с проектом
+            # --- Переходим в директорию проекта ---
             cd /home/root/bot-project
 
-            # Подгружаем NVM
+            # --- Делаем папку безопасной для git ---
+            git config --global --add safe.directory /home/root/bot-project
+
+            # --- Обновляем код с GitHub ---
+            git fetch --all
+            git reset --hard origin/main
+            git clean -fd
+
+            # --- Подгружаем NVM и нужную версию Node.js ---
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             nvm use 22.18.0
 
-            # Устанавливаем зависимости (production)
+            # --- Устанавливаем зависимости ---
             npm ci --production
 
-            # Перезапускаем PM2
-            pm2 reload tigran-food-bot || pm2 start bot.js --name tigran-food-bot
+            # --- Перезапускаем PM2 с правильным именем процесса ---
+            pm2 reload tigranFoodBot || pm2 start bot.js --name tigranFoodBot
+
+            # --- Сохраняем процесс в PM2 для автозапуска при перезагрузке сервера ---
+            pm2 save
