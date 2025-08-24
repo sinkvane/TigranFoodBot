@@ -1,3 +1,4 @@
+// reminders.js
 import cron from "node-cron";
 import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
@@ -6,11 +7,12 @@ import { userState } from "./state.js";
 
 const { TIMEZONE } = config;
 
+// --- Выдача отчётов из очереди ---
 export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // если в очереди один отчёт — запускаем сразу
+  // если нет текущего отчета и в очереди один — запускаем сразу
   if (!state.lastReminder && state.pendingReminders.length === 1) {
     const reminder = REMINDERS.find(rem => rem.name === state.pendingReminders[0]);
     if (reminder) {
@@ -25,7 +27,7 @@ export function sendPendingReports(bot, chatId) {
     return;
   }
 
-  // если в очереди несколько — показываем меню выбора
+  // если нет текущего отчета и в очереди несколько — показываем меню выбора
   if (!state.lastReminder && state.pendingReminders.length > 1) {
     const buttons = state.pendingReminders.map(r => {
       const rem = REMINDERS.find(rem => rem.name === r);
@@ -42,6 +44,7 @@ export function sendPendingReports(bot, chatId) {
   }
 }
 
+// --- Планирование cron для напоминаний ---
 export function scheduleReminders(bot, chatId, pointName) {
   const tzKey = POINTS[pointName].tz;
   const tz = TIMEZONE[tzKey];
@@ -61,10 +64,10 @@ export function scheduleReminders(bot, chatId, pointName) {
         // кладём в очередь всегда
         if (!state.pendingReminders.includes(reminder.name)) {
           state.pendingReminders.push(reminder.name);
-          log(`Добавлен в очередь отчёт "${reminder.name}" для ${chatId}`);
+          log(`Добавлен в очередь отчёт "${reminder.name}" для пользователя ${chatId}`);
         }
 
-        // если сейчас никакой отчёт не активен — сразу запускаем выдачу
+        // если сейчас нет активного отчета — выдаем сразу
         if (!state.lastReminder) {
           if (!state.reminderTimer) {
             state.reminderTimer = setTimeout(() => {
