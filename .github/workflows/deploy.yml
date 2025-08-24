@@ -20,31 +20,26 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            # --- Переходим в директорию проекта ---
             cd /home/root/bot-project
-
-            # --- Делаем папку безопасной для git ---
             git config --global --add safe.directory /home/root/bot-project
 
-            # --- Обновляем код с GitHub ---
+            # Обновляем код
             git fetch --all
             git reset --hard origin/main
             git clean -fd
 
-            # --- Подгружаем NVM и нужную версию Node.js ---
+            # Загружаем Node через NVM
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             nvm use 22.18.0
 
-            # --- Подгружаем переменные из .env ---
+            # Экспортируем .env переменные для Node
             export $(grep -v '^#' .env | xargs)
 
-            # --- Устанавливаем зависимости (production) ---
+            # Устанавливаем зависимости
             npm ci --production
 
-            # --- Полностью перезапускаем PM2 с правильным именем процесса ---
+            # Полностью перезапускаем PM2
             pm2 delete tigranFoodBot || true
             pm2 start bot.js --name tigranFoodBot
-
-            # --- Сохраняем процесс в PM2 для автозапуска при перезагрузке сервера ---
             pm2 save
