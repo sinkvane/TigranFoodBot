@@ -12,6 +12,17 @@ function escapeMarkdownV2(text) {
   return text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, "\\$1");
 }
 
+// --- Кнопка "Завершить отчет" ---
+function finishReportKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ Завершить отчет", callback_data: "finish_report" }]
+      ]
+    }
+  };
+}
+
 export function handleStart(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
@@ -77,9 +88,14 @@ export function handleCallback(bot, query) {
     state.lastReminder = reminder.name;
     state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
 
-    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
+    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте фото, видео или текст.`, finishReportKeyboard());
     bot.answerCallbackQuery(query.id);
     log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
+  }
+
+  if (data === "finish_report") {
+    handleFinishReport(bot, chatId);
+    bot.answerCallbackQuery(query.id, { text: "Отчет отправлен!" });
   }
 }
 
@@ -103,7 +119,7 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // --- Сбор сообщений в буфер ---
+  // --- Добавляем сообщения в буфер отчета ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
     state.reportBuffer.push({
@@ -113,11 +129,11 @@ export function handleMessage(bot, msg) {
       from: msg.from,
     });
 
-    bot.sendMessage(chatId, "✅ Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».");
+    bot.sendMessage(chatId, "✅ Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", finishReportKeyboard());
   }
 }
 
-// --- Функция завершения отчета ---
+// --- Завершение отчета ---
 export function handleFinishReport(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
