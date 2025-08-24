@@ -86,25 +86,32 @@ export function handleCallback(bot, query) {
       return;
     }
 
-    // Заголовок
-    bot.sendMessage(ADMIN_CHAT_ID, `Отчет "${state.lastReminder}" с точки ${state.point}`);
-
-    // Пересылаем весь контент отдельными сообщениями
+    // --- Формируем единый текст с заголовком и всеми текстовыми сообщениями ---
+    let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
     state.reportBuffer.forEach(item => {
-      const senderLink = item.from.username ? '@'+item.from.username : item.from.first_name;
-      if (item.text) bot.sendMessage(ADMIN_CHAT_ID, `${senderLink}: ${item.text}`);
-      if (item.photo) bot.sendPhoto(ADMIN_CHAT_ID, item.photo, { caption: `${senderLink}: Фото` });
-      if (item.video) bot.sendVideo(ADMIN_CHAT_ID, item.video, { caption: `${senderLink}: Видео` });
+      if (item.text) {
+        const senderLink = item.from.username ? '@'+item.from.username : item.from.first_name;
+        combinedText += `${senderLink}: ${item.text}\n`;
+      }
     });
 
-    bot.sendMessage(chatId, "✅ Отчет отправлен.");
-    state.reportBuffer = [];
-    state.lastReminder = null;
+    bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(() => {
+      // После текста отправляем отдельно фото и видео
+      state.reportBuffer.forEach(item => {
+        const senderLink = item.from.username ? '@'+item.from.username : item.from.first_name;
+        if (item.photo) bot.sendPhoto(ADMIN_CHAT_ID, item.photo, { caption: `${senderLink}: Фото` });
+        if (item.video) bot.sendVideo(ADMIN_CHAT_ID, item.video, { caption: `${senderLink}: Видео` });
+      });
 
-    if (state.pendingReminders.length > 0) {
-      bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
-      // Здесь можно вызвать sendPendingReports(bot, chatId)
-    }
+      bot.sendMessage(chatId, "✅ Отчет отправлен.");
+      state.reportBuffer = [];
+      state.lastReminder = null;
+
+      if (state.pendingReminders.length > 0) {
+        bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
+        // Можно вызвать sendPendingReports(bot, chatId)
+      }
+    });
 
     bot.answerCallbackQuery(query.id);
     log(`Пользователь ${chatId} завершил отчет`);
@@ -134,7 +141,7 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // --- Отправка контента в отчет ---
+  // --- Сбор контента в отчет ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
