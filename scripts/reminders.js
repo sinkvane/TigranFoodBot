@@ -1,8 +1,8 @@
-import cron from "node-cron";
 import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
 import { log } from "./logger.js";
 import { userState } from "./state.js";
+import cron from "node-cron";
 
 const { TIMEZONE } = config;
 
@@ -14,12 +14,14 @@ export function sendPendingReports(bot, chatId) {
   if (!state.lastReminder) {
     if (state.pendingReminders.length === 1) {
       const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
-      if (reminder) {
-        state.lastReminder = reminder.name;
-        state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
-        bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст. Когда закончите, нажмите «Завершить отчет».`);
-        log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
-      }
+      if (!reminder) return;
+
+      state.lastReminder = reminder.name;
+      state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
+
+      // --- уведомление без кнопок и "нажмите завершить" ---
+      bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
+      log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
     } else if (state.pendingReminders.length > 1) {
       const buttons = state.pendingReminders.map(r => {
         const rem = REMINDERS.find(rem => rem.name === r);
@@ -37,7 +39,6 @@ export function sendPendingReports(bot, chatId) {
   }
 }
 
-// Планирование всех напоминаний
 export function scheduleReminders(bot, chatId, pointName) {
   const point = POINTS[pointName];
   if (!point) return;
@@ -48,7 +49,6 @@ export function scheduleReminders(bot, chatId, pointName) {
   REMINDERS.forEach(reminder => {
     if (reminder.pointType && reminder.pointType !== pointType) return;
 
-    // Создаём только один cron на конкретного пользователя
     const cronKey = `${chatId}_${reminder.key}`;
     if (!userState[cronKey]) {
       userState[cronKey] = true;
@@ -59,20 +59,13 @@ export function scheduleReminders(bot, chatId, pointName) {
 
         if (!state.pendingReminders) state.pendingReminders = [];
 
-        // Добавляем в очередь, если ещё нет
+        // --- добавляем только если отчёт ещё не в очереди ---
         if (!state.pendingReminders.includes(reminder.name)) {
           state.pendingReminders.push(reminder.name);
           log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
-        }
-
-        // Если нет текущего отчёта, выдаём сразу
-        if (!state.lastReminder) {
-          if (!state.reminderTimer) {
-            state.reminderTimer = setTimeout(() => {
-              sendPendingReports(bot, chatId);
-              state.reminderTimer = null;
-            }, 1000);
-          }
+          
+          // --- уведомляем сразу без таймера ---
+          sendPendingReports(bot, chatId);
         }
       }, { timezone: tz });
     }
