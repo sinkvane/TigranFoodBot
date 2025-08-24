@@ -10,11 +10,11 @@ export const POINTS = {
   "ул. Бекхожина 1/1": { password: process.env.POINT_BEKHOZHINA_1_1, tz: "KZ", type: "24h" },
   "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
 };
-const MANY = "10 18 * * *";
-const ONE = "05 18 * * *";
-const TWO = "48 18 * * *";
-const THREE = "07 18 * * *";
-const FIVE = "08 18 * * *";
+const MANY = "55 18 * * *";
+const ONE = "53 18 * * *";
+const TWO = "52 18 * * *";
+const THREE = "53 18 * * *";
+const FIVE = "54 18 * * *";
 
 export const REMINDERS = [
   // Общие отчеты с корректным cron
