@@ -36,11 +36,15 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             nvm use 22.18.0
 
-            # --- Устанавливаем зависимости ---
+            # --- Подгружаем переменные из .env ---
+            export $(grep -v '^#' .env | xargs)
+
+            # --- Устанавливаем зависимости (production) ---
             npm ci --production
 
-            # --- Перезапускаем PM2 с правильным именем процесса ---
-            pm2 reload tigranFoodBot || pm2 start bot.js --name tigranFoodBot
+            # --- Полностью перезапускаем PM2 с правильным именем процесса ---
+            pm2 delete tigranFoodBot || true
+            pm2 start bot.js --name tigranFoodBot
 
             # --- Сохраняем процесс в PM2 для автозапуска при перезагрузке сервера ---
             pm2 save
