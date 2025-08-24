@@ -1,5 +1,6 @@
+// handlers.js
 import { POINTS, REMINDERS } from "../reports.js";
-import { config } from "../config.js";
+import { config } from "./config.js";
 import { log } from "./logger.js";
 import { getStartKeyboard, getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
 import { userState } from "./state.js";
@@ -7,7 +8,7 @@ import { scheduleReminders } from "./reminders.js";
 
 const { ADMIN_CHAT_ID } = config;
 
-// --- Функция склонения слова "отчет" ---
+// --- Склонение "отчет" ---
 function declension(count) {
   if (count % 10 === 1 && count % 100 !== 11) return "отчет";
   if ([2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100)) return "отчета";
@@ -63,6 +64,8 @@ export function handleCallback(bot, query) {
   const data = query.data;
   const state = userState[chatId];
 
+  if (!state) return;
+
   if (data.startsWith("point:")) {
     const pointName = data.split(":")[1];
     if (!POINTS[pointName]) return;
@@ -77,7 +80,7 @@ export function handleCallback(bot, query) {
   if (data.startsWith("report:")) {
     const key = data.split(":")[1];
     const reminder = REMINDERS.find(r => r.key === key);
-    if (!reminder || !state) {
+    if (!reminder) {
       bot.answerCallbackQuery(query.id);
       return;
     }
@@ -91,12 +94,12 @@ export function handleCallback(bot, query) {
   }
 
   if (data === "finish_report") {
-    if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
+    if (!state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
       bot.answerCallbackQuery(query.id, { text: "Нет контента для отправки." });
       return;
     }
 
-    // --- Формируем текст с заголовком + все текстовые сообщения ---
+    // Формируем текст с заголовком + все тексты
     let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
     state.reportBuffer.forEach(item => {
       if (item.text) {
@@ -106,29 +109,23 @@ export function handleCallback(bot, query) {
     });
 
     bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(async () => {
-      // --- Сбор всех фото и видео в одну медиагруппу ---
+      // Медиа-группа фото/видео
       const mediaGroup = [];
-
       state.reportBuffer.forEach(item => {
         const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
-
-        if (item.photo && item.photo.length > 0) {
+        if (item.photo && item.photo.length > 0)
           item.photo.forEach(f => mediaGroup.push({ type: "photo", media: f, caption: item.text || `${senderLink}: Фото` }));
-        }
-        if (item.video && item.video.length > 0) {
+        if (item.video && item.video.length > 0)
           item.video.forEach(f => mediaGroup.push({ type: "video", media: f, caption: item.text || `${senderLink}: Видео` }));
-        }
       });
 
-      if (mediaGroup.length > 0) {
-        await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
-      }
+      if (mediaGroup.length > 0) await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
       state.reportBuffer = [];
       state.lastReminder = null;
 
-      // --- Проверка оставшихся отчетов ---
+      // Оставшиеся отчеты
       if (state.pendingReminders.length > 0) {
         const count = state.pendingReminders.length;
         const word = declension(count);
@@ -145,21 +142,19 @@ export function handleCallback(bot, query) {
   }
 }
 
-// --- Сообщения пользователя ---
+// --- handleMessage ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
   if (!state) return;
 
-  // --- Проверка пароля ---
+  // Проверка пароля
   if (state.step === "enter_password") {
     if (msg.text === POINTS[state.point].password) {
       state.verified = true;
       state.step = "reports";
-
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
       log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
-
       scheduleReminders(bot, chatId, state.point);
     } else {
       bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
@@ -168,24 +163,16 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // --- Сбор контента в отчет ---
+  // Сбор контента
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
-
     const item = { from: msg.from, text: msg.text || msg.caption || null, photo: [], video: [] };
 
-    // --- Фото и видео ---
-    if (msg.photo && msg.photo.length > 0) {
-      // сохраняем только последний элемент массива, чтобы не дублировать фото
-      item.photo.push(msg.photo[msg.photo.length - 1].file_id);
-    }
-    if (msg.video) {
-      item.video.push(msg.video.file_id);
-    }
+    if (msg.photo && msg.photo.length > 0) item.photo.push(msg.photo[msg.photo.length - 1].file_id);
+    if (msg.video) item.video.push(msg.video.file_id);
 
     state.reportBuffer.push(item);
-
-    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
+    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Отправить отчет».", getFinishReportKeyboard());
     log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
   }
 }
