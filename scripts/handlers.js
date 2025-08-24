@@ -103,29 +103,49 @@ export function handleCallback(bot, query) {
 
     if (state.pendingReminders.length > 0) {
       bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
-      // Тут можно вызвать функцию sendPendingReports(bot, chatId)
+      // Здесь можно вызвать sendPendingReports(bot, chatId)
     }
 
     bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} завершил отчет "${state.lastReminder}"`);
+    log(`Пользователь ${chatId} завершил отчет`);
   }
 }
 
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
+  const text = msg.text;
   const state = userState[chatId];
-  if (!state || !state.verified || !state.lastReminder) return;
+  if (!state) return;
 
-  // Сохраняем в буфер
-  if (!state.reportBuffer) state.reportBuffer = [];
+  // --- Проверка пароля ---
+  if (state.step === "enter_password") {
+    if (text === POINTS[state.point].password) {
+      state.verified = true;
+      state.step = "reports";
 
-  const item = { from: msg.from };
-  if (msg.text) item.text = msg.text;
-  if (msg.photo) item.photo = msg.photo[msg.photo.length - 1].file_id;
-  if (msg.video) item.video = msg.video.file_id;
+      bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
+      log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
 
-  state.reportBuffer.push(item);
+      scheduleReminders(bot, chatId, state.point);
+    } else {
+      bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
+      log(`Неверный пароль для точки "${state.point}" пользователем ${chatId}`);
+    }
+    return;
+  }
 
-  bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
-  log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
+  // --- Отправка контента в отчет ---
+  if (state.verified && state.lastReminder) {
+    if (!state.reportBuffer) state.reportBuffer = [];
+
+    const item = { from: msg.from };
+    if (msg.text) item.text = msg.text;
+    if (msg.photo) item.photo = msg.photo[msg.photo.length - 1].file_id;
+    if (msg.video) item.video = msg.video.file_id;
+
+    state.reportBuffer.push(item);
+
+    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
+    log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
+  }
 }
