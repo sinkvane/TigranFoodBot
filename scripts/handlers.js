@@ -18,6 +18,7 @@ export function handleStart(bot, msg) {
 
   bot.sendMessage(chatId, "Нажмите /start, чтобы начать смену.", getStartKeyboard());
 
+  // Inline-кнопки с точками
   const inlineButtons = Object.keys(POINTS).map(key => [{ text: key, callback_data: `point:${key}` }]);
   bot.sendMessage(chatId, "Выберите точку:", { reply_markup: { inline_keyboard: inlineButtons } });
 
@@ -29,7 +30,7 @@ export function handleEnd(bot, msg) {
   const state = userState[chatId];
 
   if (!state || !state.verified) {
-    bot.sendMessage(chatId, "Смена не активна. Нажмите /start для новой смены.", getStartKeyboard());
+    bot.sendMessage(chatId, "Смена не активна. Нажмите /start, чтобы начать смену.", getStartKeyboard());
     return;
   }
 
@@ -37,12 +38,11 @@ export function handleEnd(bot, msg) {
     clearTimeout(state.reminderTimer);
     state.reminderTimer = null;
   }
-
   state.pendingReminders = [];
+  state.reportBuffer = [];
   state.verified = false;
   state.step = null;
   state.lastReminder = null;
-  state.reportBuffer = [];
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
   log(`Пользователь ${chatId} завершил смену с помощью /end`);
@@ -51,13 +51,12 @@ export function handleEnd(bot, msg) {
 export function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
-  const state = userState[chatId];
 
   if (data.startsWith("point:")) {
     const pointName = data.split(":")[1];
     if (!POINTS[pointName]) return;
 
-    userState[chatId] = { step: "enter_password", point: pointName, verified: false, pendingReminders: [], reminderTimer: null, reportBuffer: [] };
+    userState[chatId] = { step: "enter_password", point: pointName, verified: false, pendingReminders: [], reminderTimer: null };
     bot.sendMessage(chatId, `Введите пароль для ${pointName}:`);
     log(`Пользователь ${chatId} выбрал точку "${pointName}" через inline кнопку`);
     bot.answerCallbackQuery(query.id);
@@ -67,57 +66,71 @@ export function handleCallback(bot, query) {
   if (data.startsWith("report:")) {
     const key = data.split(":")[1];
     const reminder = REMINDERS.find(r => r.key === key);
-    if (!reminder || !state) {
+    if (!reminder || !userState[chatId]) {
       bot.answerCallbackQuery(query.id);
       return;
     }
 
+    const state = userState[chatId];
     state.lastReminder = reminder.name;
     state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
-    if (!state.reportBuffer) state.reportBuffer = [];
+    state.reportBuffer = [];
 
-    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте фото или текст.`, {
-      reply_markup: { inline_keyboard: [[{ text: 'Завершить отчет', callback_data: 'finish_report' }]] },
-    });
-    bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
-  }
-
-  if (data === "finish_report" && state && state.reportBuffer && state.reportBuffer.length > 0) {
-    const reminderName = state.lastReminder;
-    const senderLink = `[${query.from.username ? '@'+query.from.username : query.from.first_name}](tg://user?id=${query.from.id})`;
-    const forwardText = `Отчет "${reminderName}" с точки ${state.point}\n\nОтправил: ${senderLink}`;
-
-    state.reportBuffer.forEach(item => {
-      if (typeof item === "string") {
-        bot.sendMessage(ADMIN_CHAT_ID, `${forwardText}\n\n${item}`, { parse_mode: "Markdown" });
-      } else {
-        bot.sendPhoto(ADMIN_CHAT_ID, item, { caption: forwardText, parse_mode: "Markdown" });
+    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте фото, видео или текст. После завершения нажмите кнопку "Завершить отчет".`, {
+      reply_markup: {
+        inline_keyboard: [[{ text: "✅ Завершить отчет", callback_data: "finish_report" }]]
       }
     });
 
-    state.reportBuffer = [];
-    state.lastReminder = null;
+    bot.answerCallbackQuery(query.id);
+    log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
+    return;
+  }
 
-    bot.sendMessage(chatId, "✅ Отчет отправлен.");
+  if (data === "finish_report") {
+    const state = userState[chatId];
+    if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
+      bot.answerCallbackQuery(query.id, { text: "Нет данных для отправки." });
+      return;
+    }
 
-    if (state.pendingReminders.length > 0) sendPendingReports(bot, chatId);
+    // Формируем единое сообщение
+    let reportText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
+    state.reportBuffer.forEach(item => {
+      const senderLink = `[${item.from.username ? '@'+item.from.username : item.from.first_name}](tg://user?id=${item.from.id})`;
+      if (item.text) reportText += `${senderLink}:\n${item.text}\n\n`;
+      if (item.photo) reportText += `${senderLink}: [Фото]\n\n`;
+      if (item.video) reportText += `${senderLink}: [Видео]\n\n`;
+    });
+
+    bot.sendMessage(ADMIN_CHAT_ID, reportText, { parse_mode: "MarkdownV2" })
+      .then(() => {
+        bot.sendMessage(chatId, "✅ Отчет отправлен!");
+        log(`Отчет "${state.lastReminder}" от ${chatId} отправлен`);
+        state.lastReminder = null;
+        state.reportBuffer = [];
+      })
+      .catch(err => {
+        console.error("Ошибка при отправке отчета админу:", err);
+        bot.sendMessage(chatId, "❌ Ошибка при отправке отчета, попробуйте снова.");
+      });
+
+    bot.answerCallbackQuery(query.id);
   }
 }
 
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const text = msg.text;
+
+  if (!userState[chatId]) return;
   const state = userState[chatId];
 
-  if (!state) return;
-
-  // Проверка пароля
+  // --- Проверка пароля ---
   if (state.step === "enter_password") {
     if (text === POINTS[state.point].password) {
       state.verified = true;
       state.step = "reports";
-      state.reportBuffer = [];
 
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
       log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
@@ -130,17 +143,15 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // Отправка сообщений в текущий отчет
-  if (state.verified && state.lastReminder && (msg.text || msg.photo || msg.video)) {
-    const messageData = msg.text || (msg.photo ? msg.photo[msg.photo.length - 1].file_id : null) || (msg.video ? msg.video.file_id : null);
+  // --- Сбор отчета ---
+  if (state.verified && state.lastReminder) {
+    if (!state.reportBuffer) state.reportBuffer = [];
 
-    if (messageData) {
-      if (!state.reportBuffer) state.reportBuffer = [];
-      state.reportBuffer.push(messageData);
-
-      bot.sendMessage(chatId, 'Сообщение добавлено в текущий отчет. Когда закончите, нажмите "Завершить отчет".', {
-        reply_markup: { inline_keyboard: [[{ text: 'Завершить отчет', callback_data: 'finish_report' }]] },
-      });
-    }
+    state.reportBuffer.push({
+      text: msg.text,
+      photo: msg.photo ? msg.photo[msg.photo.length - 1].file_id : null,
+      video: msg.video ? msg.video.file_id : null,
+      from: msg.from,
+    });
   }
 }
