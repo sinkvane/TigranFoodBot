@@ -1,25 +1,39 @@
-export const POINTS = {
-  "ул. Назарбаева 52": { password: "1111", tz: "KZ", type: "day9_01" },
-  "ул. Торайгырова 28/1": { password: "1111", tz: "KZ", type: "day9_01" },
-  "ул. Ломова 58/2": { password: "5251", tz: "KZ", type: "day9_01" },
-  "ул. Камзина 114/1": { password: "0682", tz: "KZ", type: "24h" },
-  "ул. Нуркина 57/1": { password: "1835", tz: "KZ", type: "24h" },
-  "ул. Бекхожина 1/1": { password: "9425", tz: "KZ", type: "24h" },
-  "ул. Нурмагамбетова 102": { password: "1625", tz: "KZ", type: "24h" },
-};
+import dotenv from "dotenv";
+dotenv.config();
 
+export const POINTS = {
+  "ул. Назарбаева 52": { password: process.env.POINT_NAZARBAEVA_52, tz: "KZ", type: "day9_01" },
+  "ул. Торайгырова 28/1": { password: process.env.POINT_TORAIGYROVA_28_1, tz: "KZ", type: "day9_01" },
+  "ул. Ломова 58/2": { password: process.env.POINT_LOMOVA_58_2, tz: "KZ", type: "day9_01" },
+  "ул. Камзина 114/1": { password: process.env.POINT_KAMZINA_114_1, tz: "KZ", type: "24h" },
+  "ул. Нуркина 57/1": { password: process.env.POINT_NURKINA_57_1, tz: "KZ", type: "24h" },
+  "ул. Бекхожина 1/1": { password: process.env.POINT_BEKHOZHINA_1_1, tz: "KZ", type: "24h" },
+  "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
+};
 const MANY = "55 16 * * *";
-const ONE = "55 16 * * *";
+const ONE = "40 16 * * *";
+const TWO = "44 16 * * *";
+const THREE = "48 16 * * *";
 
 export const REMINDERS = [
   // Общие отчеты с корректным cron
-  { name: "Фото и видео отчёт с рабочего места", cron: "30 8 * * *", key: "workplace" },        // 8:30
-  { name: "Фото и видео отчёт о включении электроприборов", cron: "40 8 * * *", key: "appliances" }, // 8:40
-  { name: "Фото и видео отчёт об открытии кассовой смены", cron: "45 8 * * *", key: "cash_open" },   // 8:45
-  { name: "Фото и видео инвентаря на чистоту и наличие", cron: "45 8 * * *", key: "inventory" },     // 8:45
-  { name: "Фото и видео отчёт агрегаторов. Проверка стоп позиции", cron: "0 9 * * *", key: "aggregators" }, // 9:00
-  { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: "0 9 * * *", key: "appearance" }, // 9:00
-  { name: "Фото и видео отчёт холодильника", cron: "0 10 * * *", key: "fridge" }, // 10:00
+  { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
+  { name: "Фото и видео отчёт о включении электроприборов", cron: MANY, key: "appliances" }, // 8:40
+  { name: "Фото и видео отчёт об открытии кассовой смены", cron: MANY, key: "cash_open" },   // 8:45
+  { name: "Фото и видео инвентаря на чистоту и наличие", cron: MANY, key: "inventory" },     // 8:45
+  { name: "Фото и видео отчёт агрегаторов. Проверка стоп позиции", cron: MANY, key: "aggregators" }, // 9:00
+  { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: TWO, key: "appearance" }, // 9:00
+  { name: "Фото и видео отчёт холодильника", cron: THREE, key: "fridge" }, // 10:00
+
+
+  
+  // { name: "Фото и видео отчёт с рабочего места", cron: "30 8 * * *", key: "workplace" },        // 8:30
+  // { name: "Фото и видео отчёт о включении электроприборов", cron: "40 8 * * *", key: "appliances" }, // 8:40
+  // { name: "Фото и видео отчёт об открытии кассовой смены", cron: "45 8 * * *", key: "cash_open" },   // 8:45
+  // { name: "Фото и видео инвентаря на чистоту и наличие", cron: "45 8 * * *", key: "inventory" },     // 8:45
+  // { name: "Фото и видео отчёт агрегаторов. Проверка стоп позиции", cron: "0 9 * * *", key: "aggregators" }, // 9:00
+  // { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: "0 9 * * *", key: "appearance" }, // 9:00
+  // { name: "Фото и видео отчёт холодильника", cron: "0 10 * * *", key: "fridge" }, // 10:00
 
   // Фотоотчёты заготовок
   { name: "Фотоотчёт заготовок (сыр резаный, сыр тёртый, огурцы, помидоры, картофель)", cron: "0 12 * * *", key: "prep_12" },
