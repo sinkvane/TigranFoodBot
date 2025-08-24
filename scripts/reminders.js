@@ -10,46 +10,40 @@ export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Если есть только один отчёт и он ещё не показывался
-  if (state.pendingReminders.length === 1 && !state.lastReminder) {
-    const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
-    if (!reminder) return;
-
-    state.lastReminder = reminder.name;
-    state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
-
-    bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
-    log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId} текстом`);
-    return;
-  }
-
-  // Иначе формируем одно сообщение со всеми pendingReminders кнопками
-  const buttons = state.pendingReminders.map(r => {
-    const rem = REMINDERS.find(rem => rem.name === r);
-    if (!rem) return null;
-    return [{ text: r, callback_data: `report:${rem.key}` }];
-  }).filter(Boolean);
-
-  if (buttons.length > 0) {
-    // Чтобы не отправлять несколько сообщений подряд, очищаем таймер
+  // Если пользователь не начал работу с отчетом
+  if (!state.lastReminder) {
+    // --- Удаляем предыдущее уведомление, если оно есть ---
     if (state._pendingMessageId) {
-      bot.editMessageText("Есть новые отчеты, выберите один для отправки:", {
-        chat_id: chatId,
-        message_id: state._pendingMessageId,
-        reply_markup: { inline_keyboard: buttons }
-      }).catch(() => {
-        // если редактировать не удалось (сообщение удалено), отправляем новое
-        bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
-          reply_markup: { inline_keyboard: buttons }
-        }).then(msg => state._pendingMessageId = msg.message_id);
-      });
-    } else {
+      bot.deleteMessage(chatId, state._pendingMessageId).catch(() => {});
+      state._pendingMessageId = null;
+    }
+
+    if (state.pendingReminders.length === 1) {
+      const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
+      if (!reminder) return;
+
+      state.lastReminder = reminder.name;
+      state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
+
+      bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
+      log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId} текстом`);
+      return;
+    }
+
+    // --- Несколько отчетов, формируем кнопки ---
+    const buttons = state.pendingReminders.map(r => {
+      const rem = REMINDERS.find(rem => rem.name === r);
+      if (!rem) return null;
+      return [{ text: r, callback_data: `report:${rem.key}` }];
+    }).filter(Boolean);
+
+    if (buttons.length > 0) {
       bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
         reply_markup: { inline_keyboard: buttons }
       }).then(msg => state._pendingMessageId = msg.message_id);
-    }
 
-    log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+    }
   }
 }
 
