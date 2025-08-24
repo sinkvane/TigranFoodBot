@@ -86,22 +86,33 @@ export function handleCallback(bot, query) {
       return;
     }
 
-    // --- Формируем единый текст с заголовком и всеми текстовыми сообщениями ---
+    // --- Формируем текст с заголовком + все текстовые сообщения ---
     let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
     state.reportBuffer.forEach(item => {
       if (item.text) {
-        const senderLink = item.from.username ? '@'+item.from.username : item.from.first_name;
+        const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
         combinedText += `${senderLink}: ${item.text}\n`;
       }
     });
 
-    bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(() => {
-      // После текста отправляем отдельно фото и видео
+    bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(async () => {
+      // --- Сбор всех фото и видео в одну медиагруппу ---
+      const mediaGroup = [];
+
       state.reportBuffer.forEach(item => {
-        const senderLink = item.from.username ? '@'+item.from.username : item.from.first_name;
-        if (item.photo) bot.sendPhoto(ADMIN_CHAT_ID, item.photo, { caption: `${senderLink}: Фото` });
-        if (item.video) bot.sendVideo(ADMIN_CHAT_ID, item.video, { caption: `${senderLink}: Видео` });
+        const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
+
+        if (item.photo) {
+          mediaGroup.push({ type: "photo", media: item.photo, caption: `${senderLink}: Фото` });
+        }
+        if (item.video) {
+          mediaGroup.push({ type: "video", media: item.video, caption: `${senderLink}: Видео` });
+        }
       });
+
+      if (mediaGroup.length > 0) {
+        await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
+      }
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
       state.reportBuffer = [];
@@ -109,7 +120,6 @@ export function handleCallback(bot, query) {
 
       if (state.pendingReminders.length > 0) {
         bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
-        // Можно вызвать sendPendingReports(bot, chatId)
       }
     });
 

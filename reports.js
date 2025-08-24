@@ -1,168 +1,70 @@
-import { POINTS, REMINDERS } from "../reports.js";
-import { config } from "../config.js";
-import { log } from "./logger.js";
-import { getStartKeyboard, getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
-import { userState } from "./state.js";
-import { scheduleReminders } from "./reminders.js";
+import dotenv from "dotenv";
+dotenv.config();
 
-const { ADMIN_CHAT_ID } = config;
+export const POINTS = {
+  "ул. Назарбаева 52": { password: process.env.POINT_NAZARBAEVA_52, tz: "KZ", type: "day9_01" },
+  "ул. Торайгырова 28/1": { password: process.env.POINT_TORAIGYROVA_28_1, tz: "KZ", type: "day9_01" },
+  "ул. Ломова 58/2": { password: process.env.POINT_LOMOVA_58_2, tz: "KZ", type: "day9_01" },
+  "ул. Камзина 114/1": { password: process.env.POINT_KAMZINA_114_1, tz: "KZ", type: "24h" },
+  "ул. Нуркина 57/1": { password: process.env.POINT_NURKINA_57_1, tz: "KZ", type: "24h" },
+  "ул. Бекхожина 1/1": { password: process.env.POINT_BEKHOZHINA_1_1, tz: "KZ", type: "24h" },
+  "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
+};
+const MANY = "10 18 * * *";
+const ONE = "05 18 * * *";
+const TWO = "48 18 * * *";
+const THREE = "07 18 * * *";
+const FIVE = "08 18 * * *";
 
-export function handleStart(bot, msg) {
-  const chatId = msg.chat.id;
-  const state = userState[chatId];
+export const REMINDERS = [
+  // Общие отчеты с корректным cron
+  { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
+  { name: "Фото и видео отчёт о включении электроприборов", cron: MANY, key: "appliances" }, // 8:40
+  { name: "Фото и видео отчёт об открытии кассовой смены", cron: MANY, key: "cash_open" },   // 8:45
+  { name: "Фото и видео инвентаря на чистоту и наличие", cron: MANY, key: "inventory" },     // 8:45
+  { name: "Фото и видео отчёт агрегаторов. Проверка стоп позиции", cron: MANY, key: "aggregators" }, // 9:00
+  { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: TWO, key: "appearance" }, // 9:00
+  { name: "Фото и видео отчёт холодильника", cron: THREE, key: "fridge" }, // 10:00
 
-  if (state && state.verified) {
-    bot.sendMessage(chatId, "Смена уже активна. Для завершения нажмите /end.", getEndKeyboard());
-    return;
-  }
 
-  bot.sendMessage(chatId, "Нажмите /start, чтобы начать смену.", getStartKeyboard());
+  
+  // { name: "Фото и видео отчёт с рабочего места", cron: "30 8 * * *", key: "workplace" },        // 8:30
+  // { name: "Фото и видео отчёт о включении электроприборов", cron: "40 8 * * *", key: "appliances" }, // 8:40
+  // { name: "Фото и видео отчёт об открытии кассовой смены", cron: "45 8 * * *", key: "cash_open" },   // 8:45
+  // { name: "Фото и видео инвентаря на чистоту и наличие", cron: "45 8 * * *", key: "inventory" },     // 8:45
+  // { name: "Фото и видео отчёт агрегаторов. Проверка стоп позиции", cron: "0 9 * * *", key: "aggregators" }, // 9:00
+  // { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: "0 9 * * *", key: "appearance" }, // 9:00
+  // { name: "Фото и видео отчёт холодильника", cron: "0 10 * * *", key: "fridge" }, // 10:00
 
-  const inlineButtons = Object.keys(POINTS).map(key => [{ text: key, callback_data: `point:${key}` }]);
-  bot.sendMessage(chatId, "Выберите точку:", { reply_markup: { inline_keyboard: inlineButtons } });
+  // Фотоотчёты заготовок
+  { name: "Фотоотчёт заготовок (сыр резаный, сыр тёртый, огурцы, помидоры, картофель)", cron: "0 12 * * *", key: "prep_12" },
+  { name: "Фотоотчёт заготовок (сыр резаный, сыр тёртый, огурцы, помидоры, картофель)", cron: "0 14 * * *", key: "prep_14" },
+  { name: "Фотоотчёт заготовок (сыр резаный, сыр тёртый, огурцы, помидоры, картофель)", cron: "0 16 * * *", key: "prep_16" },
+  { name: "Фотоотчёт заготовок (сыр резаный, сыр тёртый, огурцы, помидоры, картофель)", cron: "0 18 * * *", key: "prep_18" },
 
-  log(`Пользователь ${chatId} вызвал /start`);
-}
+  // Фото и видео отчёт о внутреннем состоянии павильона
+  { name: "Фото и видео отчёт о внутреннем состоянии павильона", cron: "0 13 * * *", key: "internal_13" },
+  { name: "Фото и видео отчёт о внутреннем состоянии павильона", cron: "0 15 * * *", key: "internal_15" },
+  { name: "Фото и видео отчёт о внутреннем состоянии павильона", cron: "0 17 * * *", key: "internal_17" },
+  { name: "Фото и видео отчёт о внутреннем состоянии павильона", cron: "0 19 * * *", key: "internal_19" },
+  { name: "Фото и видео отчёт о внутреннем состоянии павильона", cron: "0 21 * * *", key: "internal_21" },
 
-export function handleEnd(bot, msg) {
-  const chatId = msg.chat.id;
-  const state = userState[chatId];
+  // Фото и видео отчёт о внешнем состоянии павильона
+  { name: "Фото и видео отчёт о внешнем состоянии павильона", cron: "0 13 * * *", key: "external_13" },
+  { name: "Фото и видео отчёт о внешнем состоянии павильона", cron: "0 15 * * *", key: "external_15" },
+  { name: "Фото и видео отчёт о внешнем состоянии павильона", cron: "0 17 * * *", key: "external_17" },
 
-  if (!state || !state.verified) {
-    bot.sendMessage(chatId, "Смена не активна. Нажмите /start, чтобы начать смену.", getStartKeyboard());
-    return;
-  }
+  // Фото и видео отчёт о закрытии смены
+  { name: "Фото и видео отчёт о закрытии смены", cron: "0 1 * * *", key: "closing" },
 
-  if (state.reminderTimer) {
-    clearTimeout(state.reminderTimer);
-    state.reminderTimer = null;
-  }
+  // Отчёты для всех точек
+  { name: "Отчитаться по включению наружнего освещения", cron: "0 19 * * *", key: "outside_lights" },
+  { name: "Скинуть остаток по булочкам (пита б, пита м, хотдог, лаваш сырный)", cron: "0 22 * * *", key: "buns" },
 
-  state.pendingReminders = [];
-  state.reportBuffer = [];
-  state.verified = false;
-  state.step = null;
-  state.lastReminder = null;
+  // Новые отчёты для точек 9:00–01:00
+  { name: "Скинуть остаток по лавашу (стандарт и ххл)", cron: "0 1 * * *", key: "lavash", pointType: "day9_01" },
+  { name: "Список необходимого товара", cron: "0 1 * * *", key: "needed_goods_01", pointType: "day9_01" },
 
-  bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
-  log(`Пользователь ${chatId} завершил смену с помощью /end`);
-}
-
-export function handleCallback(bot, query) {
-  const chatId = query.message.chat.id;
-  const data = query.data;
-  const state = userState[chatId];
-
-  if (data.startsWith("point:")) {
-    const pointName = data.split(":")[1];
-    if (!POINTS[pointName]) return;
-
-    userState[chatId] = { step: "enter_password", point: pointName, verified: false, pendingReminders: [], reminderTimer: null, reportBuffer: [] };
-    bot.sendMessage(chatId, `Введите пароль для ${pointName}:`);
-    log(`Пользователь ${chatId} выбрал точку "${pointName}"`);
-    bot.answerCallbackQuery(query.id);
-    return;
-  }
-
-  if (data.startsWith("report:")) {
-    const key = data.split(":")[1];
-    const reminder = REMINDERS.find(r => r.key === key);
-    if (!reminder || !state) {
-      bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    state.lastReminder = reminder.name;
-    state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
-
-    bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте текст, фото или видео.`, getFinishReportKeyboard());
-    bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
-  }
-
-  if (data === "finish_report") {
-    if (!state || !state.lastReminder || !state.reportBuffer || state.reportBuffer.length === 0) {
-      bot.answerCallbackQuery(query.id, { text: "Нет контента для отправки." });
-      return;
-    }
-
-    // --- Формируем текст с заголовком + все текстовые сообщения ---
-    let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
-    state.reportBuffer.forEach(item => {
-      if (item.text) {
-        const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
-        combinedText += `${senderLink}: ${item.text}\n`;
-      }
-    });
-
-    bot.sendMessage(ADMIN_CHAT_ID, combinedText.trim()).then(async () => {
-      // --- Сбор всех фото и видео в одну медиагруппу ---
-      const mediaGroup = [];
-
-      state.reportBuffer.forEach(item => {
-        const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
-
-        if (item.photo) {
-          mediaGroup.push({ type: "photo", media: item.photo, caption: `${senderLink}: Фото` });
-        }
-        if (item.video) {
-          mediaGroup.push({ type: "video", media: item.video, caption: `${senderLink}: Видео` });
-        }
-      });
-
-      if (mediaGroup.length > 0) {
-        await bot.sendMediaGroup(ADMIN_CHAT_ID, mediaGroup);
-      }
-
-      bot.sendMessage(chatId, "✅ Отчет отправлен.");
-      state.reportBuffer = [];
-      state.lastReminder = null;
-
-      if (state.pendingReminders.length > 0) {
-        bot.sendMessage(chatId, "Есть еще незавершенные отчеты, выберите один для отправки:");
-      }
-    });
-
-    bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} завершил отчет`);
-  }
-}
-
-export function handleMessage(bot, msg) {
-  const chatId = msg.chat.id;
-  const text = msg.text;
-  const state = userState[chatId];
-  if (!state) return;
-
-  // --- Проверка пароля ---
-  if (state.step === "enter_password") {
-    if (text === POINTS[state.point].password) {
-      state.verified = true;
-      state.step = "reports";
-
-      bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
-      log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
-
-      scheduleReminders(bot, chatId, state.point);
-    } else {
-      bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
-      log(`Неверный пароль для точки "${state.point}" пользователем ${chatId}`);
-    }
-    return;
-  }
-
-  // --- Сбор контента в отчет ---
-  if (state.verified && state.lastReminder) {
-    if (!state.reportBuffer) state.reportBuffer = [];
-
-    const item = { from: msg.from };
-    if (msg.text) item.text = msg.text;
-    if (msg.photo) item.photo = msg.photo[msg.photo.length - 1].file_id;
-    if (msg.video) item.video = msg.video.file_id;
-
-    state.reportBuffer.push(item);
-
-    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
-    log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
-  }
-}
+  // Новые отчёты для круглосуточных точек
+  { name: "Список необходимого товара", cron: FIVE, key: "needed_goods_24h", pointType: "24h" },
+];
