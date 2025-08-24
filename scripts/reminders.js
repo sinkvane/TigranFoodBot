@@ -10,38 +10,47 @@ export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Копируем массив, чтобы можно было итерировать
-  const pending = [...state.pendingReminders];
+  // Если нет текущего отчета, выдаем следующий
+  if (!state.lastReminder) {
+    if (state.pendingReminders.length === 1) {
+      const reminder = REMINDERS.find(r => r.name === state.pendingReminders[0]);
+      if (!reminder) return;
 
-  // Если нет текущего отчёта, выдаём все новые уведомления
-  pending.forEach(reminderName => {
-    const reminder = REMINDERS.find(r => r.name === reminderName);
-    if (!reminder) return;
-
-    // Добавляем в очередь текущего отчёта, если он свободен
-    if (!state.lastReminder) {
       state.lastReminder = reminder.name;
       state.pendingReminders = state.pendingReminders.filter(r => r !== reminder.name);
 
-      // --- уведомление без кнопок и "нажмите завершить"
+      // --- уведомление без кнопок и "нажмите завершить" ---
       bot.sendMessage(chatId, `🔔 Поступил отчет: "${reminder.name}". Отправьте фото, видео или текст.`);
-      log(`Отчёт "${reminder.name}" выдан пользователю ${chatId}`);
+      log(`Один отчёт "${reminder.name}" выдан пользователю ${chatId}`);
+    } else if (state.pendingReminders.length > 1) {
+      const buttons = state.pendingReminders.map(r => {
+        const rem = REMINDERS.find(rem => rem.name === r);
+        if (!rem) return null;
+        return [{ text: r, callback_data: `report:${rem.key}` }];
+      }).filter(Boolean);
+
+      if (buttons.length > 0) {
+        bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
+          reply_markup: { inline_keyboard: buttons }
+        });
+        log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      }
     }
-  });
+  } else {
+    // Уже есть выбранный отчёт, но есть новые в очереди
+    if (state.pendingReminders.length > 0) {
+      const buttons = state.pendingReminders.map(r => {
+        const rem = REMINDERS.find(rem => rem.name === r);
+        if (!rem) return null;
+        return [{ text: r, callback_data: `report:${rem.key}` }];
+      }).filter(Boolean);
 
-  // Если после этого остались ещё отчёты, выдаём их через кнопки
-  if (state.pendingReminders.length > 1) {
-    const buttons = state.pendingReminders.map(r => {
-      const rem = REMINDERS.find(rem => rem.name === r);
-      if (!rem) return null;
-      return [{ text: r, callback_data: `report:${rem.key}` }];
-    }).filter(Boolean);
-
-    if (buttons.length > 0) {
-      bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
-        reply_markup: { inline_keyboard: buttons }
-      });
-      log(`Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      if (buttons.length > 0) {
+        bot.sendMessage(chatId, "Есть новые отчеты, выберите один для отправки:", {
+          reply_markup: { inline_keyboard: buttons }
+        });
+        log(`Добавлены новые отчёты для пользователя ${chatId}: ${state.pendingReminders.join(", ")}`);
+      }
     }
   }
 }
@@ -66,11 +75,11 @@ export function scheduleReminders(bot, chatId, pointName) {
 
         if (!state.pendingReminders) state.pendingReminders = [];
 
-        // --- добавляем отчёт в очередь
+        // Добавляем новый отчёт в очередь, даже если первый ещё не выбран
         state.pendingReminders.push(reminder.name);
         log(`[CRON] Добавлен отчёт "${reminder.name}" для пользователя ${chatId}`);
 
-        // --- сразу выдаём все pending
+        // Отправляем уведомления о всех pending отчётах
         sendPendingReports(bot, chatId);
       }, { timezone: tz });
     }
