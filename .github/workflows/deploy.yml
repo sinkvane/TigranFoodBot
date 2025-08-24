@@ -26,7 +26,7 @@ jobs:
             # --- Делаем папку безопасной для git ---
             git config --global --add safe.directory /home/root/bot-project
 
-            # --- Обновляем код с GitHub ---
+            # --- Полностью обновляем код с GitHub ---
             git fetch --all
             git reset --hard origin/main
             git clean -fd
@@ -36,15 +36,15 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             nvm use 22.18.0
 
-            # --- Экспортируем переменные из .env ---
+            # --- Загружаем переменные окружения из .env ---
             export $(grep -v '^#' .env | xargs)
 
-            # --- Полностью удаляем старый процесс PM2 ---
+            # --- Устанавливаем зависимости (production) ---
+            npm ci --production
+
+            # --- Полностью перезапускаем PM2 с правильным именем процесса ---
             pm2 delete tigranFoodBot || true
-            pm2 kill
+            pm2 start bot.js --name tigranFoodBot
 
-            # --- Стартуем бот с подгрузкой dotenv (на всякий случай) ---
-            pm2 start bot.js --name tigranFoodBot --node-args="-r dotenv/config"
-
-            # --- Сохраняем процесс PM2 для автозапуска при перезагрузке сервера ---
+            # --- Сохраняем процесс в PM2 для автозапуска при перезагрузке сервера ---
             pm2 save
