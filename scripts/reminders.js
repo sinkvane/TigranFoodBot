@@ -10,29 +10,35 @@ export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
-  // Если пользователь не начал работу с отчетом
+  // Если пользователь ещё не начал работу с отчетом
   if (!state.lastReminder) {
-    // Удаляем старое сообщение, если оно есть
+    // Отменяем старое сообщение
     if (state._pendingMessageId) {
       bot.deleteMessage(chatId, state._pendingMessageId).catch(() => {});
       state._pendingMessageId = null;
     }
 
-    // --- Несколько отчетов, формируем кнопки ---
-    const buttons = state.pendingReminders.map(r => {
-      const rem = REMINDERS.find(rem => rem.name === r);
-      if (!rem) return null;
-      return [{ text: r, callback_data: `report:${rem.key}` }];
-    }).filter(Boolean);
+    // Если таймер уже висит, сбрасываем его
+    if (state._sendTimer) clearTimeout(state._sendTimer);
 
-    if (buttons.length > 0) {
-      bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
-        reply_markup: { inline_keyboard: buttons }
-      }).then(msg => {
-        state._pendingMessageId = msg.message_id;
-      });
-      log(`[REMINDERS] Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
-    }
+    // Ставим новый таймер на 1.5 секунды
+    state._sendTimer = setTimeout(() => {
+      const buttons = state.pendingReminders.map(r => {
+        const rem = REMINDERS.find(rem => rem.name === r);
+        if (!rem) return null;
+        return [{ text: r, callback_data: `report:${rem.key}` }];
+      }).filter(Boolean);
+
+      if (buttons.length > 0) {
+        bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
+          reply_markup: { inline_keyboard: buttons }
+        }).then(msg => state._pendingMessageId = msg.message_id);
+
+        log(`[REMINDERS] Несколько отчётов отправлены пользователю ${chatId}: ${state.pendingReminders.join(", ")}`);
+      }
+
+      state._sendTimer = null;
+    }, 1500);
   }
 }
 
