@@ -145,7 +145,6 @@ export function handleCallback(bot, query) {
   }
 }
 
-// --- Сообщения пользователя ---
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
@@ -176,7 +175,6 @@ export function handleMessage(bot, msg) {
 
     // --- Фото и видео ---
     if (msg.photo && msg.photo.length > 0) {
-      // сохраняем только последний элемент массива, чтобы не дублировать фото
       item.photo.push(msg.photo[msg.photo.length - 1].file_id);
     }
     if (msg.video) {
@@ -185,7 +183,12 @@ export function handleMessage(bot, msg) {
 
     state.reportBuffer.push(item);
 
-    bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
+    // --- чтобы при альбоме (media_group) не дублировать уведомления ---
+    if (!msg.media_group_id || state.lastMediaGroupId !== msg.media_group_id) {
+      bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
+      state.lastMediaGroupId = msg.media_group_id || null;
+    }
+
     log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
   }
 }
