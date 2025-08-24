@@ -1,6 +1,6 @@
 // handlers.js
 import { POINTS, REMINDERS } from "../reports.js";
-import { config } from "./config.js";
+import { config } from "../config.js";
 import { log } from "./logger.js";
 import { getStartKeyboard, getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
 import { userState } from "./state.js";
