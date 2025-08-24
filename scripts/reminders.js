@@ -3,7 +3,6 @@ import { REMINDERS, POINTS } from "../reports.js";
 import { config } from "../config.js";
 import { log } from "./logger.js";
 import { userState } from "./state.js";
-import { handleFinishReport } from "./handlers.js";
 
 const { TIMEZONE } = config;
 
