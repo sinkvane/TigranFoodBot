@@ -65,5 +65,5 @@ export const REMINDERS = [
   { name: "Список необходимого товара", cron: "0 1 * * *", key: "needed_goods_01", pointType: "day9_01" },
 
   // Новые отчёты для круглосуточных точек
-  { name: "Список необходимого товара", cron: FIVE, key: "needed_goods_24h", pointType: "24h" },
+  { name: "Список необходимого товара", cron: "* 7 * * *", key: "needed_goods_24h", pointType: "24h" },
 ];
