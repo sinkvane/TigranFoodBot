@@ -5,9 +5,7 @@ module.exports = {
       script: "./bot.js",
       watch: false,             // не следим за изменениями, чтобы не перезапускался сам
       env: {
-        NODE_ENV: "production",
-        TG_BOT_TOKEN: process.env.TG_BOT_TOKEN,
-        TG_ADMIN_CHAT_ID: process.env.TG_ADMIN_CHAT_ID,
+        NODE_ENV: "production"
       },
       error_file: "./logs/error.log",   // файл для ошибок
       out_file: "./logs/out.log",       // обычные логи
