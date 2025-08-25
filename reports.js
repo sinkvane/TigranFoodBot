@@ -12,14 +12,14 @@ export const POINTS = {
 };
 
 // const MANY = "03 23 * * *";
-// const ONE = "02 23 * * *";
+const ONE = "18 19 * * *";
 // const TWO = "02 23 * * *";
 // const THREE = "01 23 * * *";
 // const FIVE = "16 22 * * *";
 
 export const REMINDERS = [
   // Тестовые отчеты с корректным cron
-  // { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
+  { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
   // { name: "Фото и видео отчёт о включении электроприборов", cron: MANY, key: "appliances" }, // 8:40
   // { name: "Фото и видео отчёт об открытии кассовой смены", cron: MANY, key: "cash_open" },   // 8:45
   // { name: "Фото и видео инвентаря на чистоту и наличие", cron: MANY, key: "inventory" },     // 8:45
