@@ -13,9 +13,15 @@ function declension(count) {
   return "отчетов";
 }
 
+// Возвращаем username с @, если есть, иначе first_name
+function getUserName(user) {
+  return user.username ? '@' + user.username : user.first_name;
+}
+
 export function handleStart(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
+  const userName = getUserName(msg.from);
 
   if (state && state.verified) {
     bot.sendMessage(chatId, "Смена уже активна. Для завершения нажмите /end.", getEndKeyboard());
@@ -25,12 +31,13 @@ export function handleStart(bot, msg) {
   bot.sendMessage(chatId, "Нажмите /start, чтобы начать смену.", getStartKeyboard());
   const inlineButtons = Object.keys(POINTS).map(key => [{ text: key, callback_data: `point:${key}` }]);
   bot.sendMessage(chatId, "Выберите точку:", { reply_markup: { inline_keyboard: inlineButtons } });
-  log(`Пользователь ${chatId} вызвал /start`);
+  log(`Пользователь ${userName} вызвал /start`);
 }
 
 export function handleEnd(bot, msg) {
   const chatId = msg.chat.id;
   const state = userState[chatId];
+  const userName = getUserName(msg.from);
 
   if (!state || !state.verified) {
     bot.sendMessage(chatId, "Смена не активна. Нажмите /start, чтобы начать смену.", getStartKeyboard());
@@ -47,13 +54,14 @@ export function handleEnd(bot, msg) {
   state._pendingMessageId = null;
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
-  log(`Пользователь ${chatId} завершил смену с помощью /end`);
+  log(`Пользователь ${userName} завершил смену с помощью /end`);
 }
 
 export function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
   let state = userState[chatId];
+  const userName = getUserName(query.from || query.message.from);
 
   if (data.startsWith("point:")) {
     const pointName = data.split(":")[1];
@@ -77,7 +85,7 @@ export function handleCallback(bot, query) {
 
     bot.sendMessage(chatId, `Введите пароль для точки: ${pointName}`);
     bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} выбрал точку "${pointName}"`);
+    log(`Пользователь ${userName} выбрал точку "${pointName}"`);
     return;
   }
 
@@ -92,7 +100,7 @@ export function handleCallback(bot, query) {
 
     bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте текст, фото или видео.`, getFinishReportKeyboard());
     bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} выбрал отчет "${reminder.name}"`);
+    log(`Пользователь ${userName} выбрал отчет "${reminder.name}"`);
   }
 
   if (data === "finish_report") {
@@ -110,8 +118,8 @@ export function handleCallback(bot, query) {
     let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
     itemsForReport.forEach(item => {
       if (item.text) {
-        const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
-        combinedText += `${senderLink}: ${item.text}\n`;
+        const senderName = getUserName(item.from);
+        combinedText += `${senderName}: ${item.text}\n`;
       }
     });
 
@@ -120,12 +128,12 @@ export function handleCallback(bot, query) {
       const sentFiles = new Set();
 
       itemsForReport.forEach(item => {
-        const senderLink = item.from.username ? '@' + item.from.username : item.from.first_name;
+        const senderName = getUserName(item.from);
 
         if (item.photo) {
           item.photo.forEach(f => {
             if (!sentFiles.has(f)) {
-              mediaGroup.push({ type: "photo", media: f, caption: item.text || `${senderLink}: Фото` });
+              mediaGroup.push({ type: "photo", media: f, caption: item.text || `${senderName}: Фото` });
               sentFiles.add(f);
             }
           });
@@ -133,7 +141,7 @@ export function handleCallback(bot, query) {
         if (item.video) {
           item.video.forEach(f => {
             if (!sentFiles.has(f)) {
-              mediaGroup.push({ type: "video", media: f, caption: item.text || `${senderLink}: Видео` });
+              mediaGroup.push({ type: "video", media: f, caption: item.text || `${senderName}: Видео` });
               sentFiles.add(f);
             }
           });
@@ -148,7 +156,6 @@ export function handleCallback(bot, query) {
 
       bot.sendMessage(chatId, "✅ Отчет отправлен.");
 
-      // --- После завершения отчета показываем все оставшиеся pendingReminders ---
       state.lastReminder = null;
       state._lastMsgId = null;
       state._contentAdded = false;
@@ -159,29 +166,38 @@ export function handleCallback(bot, query) {
     });
 
     bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${chatId} завершил отчет`);
+    log(`Пользователь ${userName} завершил отчет`);
   }
 }
 
 export function handleMessage(bot, msg) {
   const chatId = msg.chat.id;
-  const state = userState[chatId];
+  let state = userState[chatId];
   if (!state) return;
+  const userName = getUserName(msg.from);
 
+  // --- Проверка пароля ---
   if (state.step === "enter_password") {
-    if (msg.text === POINTS[state.point].password) {
+    const correctPassword = POINTS[state.point]?.password;
+    if (!correctPassword) {
+      bot.sendMessage(chatId, "Ошибка: точка не найдена.");
+      return;
+    }
+
+    if (msg.text === correctPassword) {
       state.verified = true;
       state.step = "reports";
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
-      log(`Пользователь ${chatId} авторизован для точки "${state.point}"`);
+      log(`Пользователь ${userName} авторизован для точки "${state.point}"`);
       scheduleReminders(bot, chatId, state.point);
     } else {
       bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
-      log(`Неверный пароль для точки "${state.point}" пользователем ${chatId}`);
+      log(`Неверный пароль для точки "${state.point}" пользователем ${userName}`);
     }
     return;
   }
 
+  // --- Обработка отчетов ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
@@ -219,7 +235,7 @@ export function handleMessage(bot, msg) {
 
     if (contentAddedNow) {
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
-      log(`Пользователь ${chatId} добавил контент к отчету "${state.lastReminder}"`);
+      log(`Пользователь ${userName} добавил контент к отчету "${state.lastReminder}"`);
     }
   }
 }

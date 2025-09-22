@@ -11,13 +11,23 @@ export const POINTS = {
   "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
 };
 
-// const MANY = "03 23 * * *";
-// const ONE = "55 19 * * *";
-// const TWO = "02 23 * * *";
-// const THREE = "01 23 * * *";
-// const FIVE = "16 22 * * *";
+const MANY = "38 21 * * *";
+const ONE = "31 21 * * *";
+const TWO = "33 21 * * *";
+const THREE = "32 21 * * *";
+const FIVE = "30 21 * * *";
 
 export const REMINDERS = [
+  // Тестовые отчеты с корректным cron
+  // { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
+  // { name: "Фото и видео отчёт о включении электроприборов", cron: MANY, key: "appliances" }, // 8:40
+  // { name: "Фото и видео отчёт об открытии кассовой смены", cron: MANY, key: "cash_open" },   // 8:45
+  // { name: "Фото и видео инвентаря на чистоту и наличие", cron: MANY, key: "inventory" },     // 8:45
+  // { name: "Фото и видео отчёт агрегаторов. Проверка стоп позиции", cron: MANY, key: "aggregators" }, // 9:00
+  // { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: TWO, key: "appearance" }, // 9:00
+  // { name: "Фото и видео отчёт холодильника", cron: THREE, key: "fridge" }, // 10:00
+  // { name: "Фотоотчёт заготовок (сыр резаный, сыр тёртый, огурцы, помидоры, картофель)", cron: FIVE, key: "prep_12" },
+
   // Утренние фотоотчёты
   { name: "Фото и видео отчёт с рабочего места", cron: "45 8 * * *", key: "workplace" },
   { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: "50 8 * * *", key: "appearance" },
