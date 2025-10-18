@@ -7,12 +7,16 @@ import { log } from "./scripts/logger.js";
 import { getStartKeyboard, getEndKeyboard } from "./scripts/keyboards.js";
 import { userState } from "./scripts/state.js";
 import { handleStart, handleEnd, handleCallback, handleMessage } from "./scripts/handlers.js";
+import { cleanOldShifts } from "./scripts/reminders.js";
 
 const { TOKEN } = config;
 
 // ==== Создание бота ====
 const bot = new TelegramBot(TOKEN, { polling: true });
 log("Бот запущен и ожидает команду /start");
+
+// ==== Очистка старых смен сразу при старте ====
+cleanOldShifts(bot);
 
 // ==== Обработчики ====
 bot.onText(/\/start/, (msg) => handleStart(bot, msg));
