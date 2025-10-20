@@ -6,42 +6,55 @@ import cron from "node-cron";
 
 const { TIMEZONE } = config;
 
-// --- Получение имени пользователя для логов ---
-function getUserName(state) {
-  if (!state || !state.from) return "Неизвестный пользователь";
-  return state.from.username ? `@${state.from.username}` : state.from.first_name;
+// --- Универсальное получение имени пользователя ---
+function getUserName(input) {
+  const from = input?.from || input;
+  if (!from) return "Неизвестный пользователь";
+  const name = from.username ? `@${from.username}` : (from.first_name || "Без имени");
+  const id = from.id ? ` (id: ${from.id})` : "";
+  return name + id;
 }
 
+/**
+ * Отправка пользователю напоминаний (списка доступных отчётов)
+ */
 export function sendPendingReports(bot, chatId) {
   const state = userState[chatId];
   if (!state || !state.pendingReminders || state.pendingReminders.length === 0) return;
 
   // Если пользователь ещё не начал работу с отчетом
   if (!state.lastReminder) {
-    // Отменяем старое сообщение
+    // Удаляем старое сообщение с кнопками, если оно есть
     if (state._pendingMessageId) {
       bot.deleteMessage(chatId, state._pendingMessageId).catch(() => {});
       state._pendingMessageId = null;
     }
 
-    // Если таймер уже висит, сбрасываем его
+    // Сбрасываем старый таймер
     if (state._sendTimer) clearTimeout(state._sendTimer);
 
-    // Ставим новый таймер на 1.5 секунды
+    // Ставим новый таймер на 1.5 секунды (чтобы не спамить)
     state._sendTimer = setTimeout(() => {
-      const buttons = state.pendingReminders.map(r => {
-        const rem = REMINDERS.find(rem => rem.name === r);
-        if (!rem) return null;
-        return [{ text: r, callback_data: `report:${rem.key}` }];
-      }).filter(Boolean);
+      const buttons = state.pendingReminders
+        .map(r => {
+          const rem = REMINDERS.find(rem => rem.name === r);
+          if (!rem) return null;
+          return [{ text: rem.name, callback_data: `report:${rem.key}` }];
+        })
+        .filter(Boolean);
 
       if (buttons.length > 0) {
-        bot.sendMessage(chatId, "🔔 Поступили новые отчеты, выберите один для отправки:", {
+        bot.sendMessage(chatId, "🔔 Поступили новые отчёты, выберите один для отправки:", {
           reply_markup: { inline_keyboard: buttons }
-        }).then(msg => state._pendingMessageId = msg.message_id);
+        }).then(msg => (state._pendingMessageId = msg.message_id));
 
         const userName = getUserName(state);
-        log(`[REMINDERS] Несколько отчётов отправлены пользователю ${userName}: ${state.pendingReminders.join(", ")}`);
+        // логируем по ключам
+        const keys = state.pendingReminders
+          .map(r => REMINDERS.find(rem => rem.name === r)?.key)
+          .filter(Boolean)
+          .join(", ");
+        log(`[REMINDERS] Несколько отчётов (ключи) отправлены пользователю ${userName}: ${keys}`);
       }
 
       state._sendTimer = null;
@@ -49,15 +62,17 @@ export function sendPendingReports(bot, chatId) {
   }
 }
 
+
 /**
  * Проверка всех старых смен при старте бота.
- * Завершает смены, открытые более 2 суток.
+ * Завершает смены, открытые более 1 суток.
  */
-export function cleanOldShifts(bot) {
+export function cleanOldShifts() {
   const now = Date.now();
 
   for (const [chatId, state] of Object.entries(userState)) {
-    if (state.startTime && (now - state.startTime) > 2 * 24 * 60 * 60 * 1000) {
+    if (state.startTime && (now - state.startTime) > 24 * 60 * 60 * 1000) { // 1 сутки
+      // Очистка состояния
       state.pendingReminders = [];
       state.reportBuffer = [];
       state.verified = false;
@@ -68,18 +83,20 @@ export function cleanOldShifts(bot) {
       state.startTime = null;
 
       if (state._pendingMessageId) {
-        try { 
-          bot.deleteMessage(chatId, state._pendingMessageId.toString()).catch(() => {}); 
-        } catch (e) {}
+        try {
+          delete state._pendingMessageId;
+        } catch (_) {}
       }
-      state._pendingMessageId = null;
 
       const userName = getUserName(state);
-      log(`[CLEANUP] Смена пользователя ${userName} автоматически завершена при старте бота (более 2 суток)`);
+      log(`[CLEANUP] Смена пользователя ${userName} автоматически завершена при старте бота (более 1 суток)`);
     }
   }
 }
 
+/**
+ * Планирование напоминаний (cron-задачи)
+ */
 export function scheduleReminders(bot, chatId, pointName) {
   const point = POINTS[pointName];
   if (!point) return;
@@ -98,8 +115,8 @@ export function scheduleReminders(bot, chatId, pointName) {
         const state = userState[chatId];
         if (!state || !state.verified) return;
 
-        // ✅ Авто-завершение смены через 2 суток (48 часов)
-        if (state.startTime && (Date.now() - state.startTime) > 2 * 24 * 60 * 60 * 1000) {
+        // ✅ Автоматическое завершение смены через 1 сутки (24 часа)
+        if (state.startTime && (Date.now() - state.startTime) > 24 * 60 * 60 * 1000) {
           state.pendingReminders = [];
           state.reportBuffer = [];
           state.verified = false;
@@ -111,13 +128,12 @@ export function scheduleReminders(bot, chatId, pointName) {
 
           if (state._pendingMessageId) {
             try {
-              bot.deleteMessage(chatId, state._pendingMessageId.toString()).catch(() => {});
-            } catch (e) {}
+              delete state._pendingMessageId;
+            } catch (_) {}
           }
 
-          state._pendingMessageId = null;
           const userName = getUserName(state);
-          log(`[AUTO-END] Смена пользователя ${userName} автоматически завершена (более 2 суток)`);
+          log(`[AUTO-END] Смена пользователя ${userName} автоматически завершена (более 1 суток)`);
           return;
         }
 

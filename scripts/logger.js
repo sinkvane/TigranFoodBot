@@ -1,4 +1,5 @@
-export function log(message) {
+const originalError = console.error;
+console.error = (...args) => {
   const now = new Date().toISOString();
-  console.log(`[${now}] ${message}`);
-}
+  originalError(`[${now}]`, ...args);
+};

@@ -13,9 +13,13 @@ function declension(count) {
   return "отчетов";
 }
 
-// Возвращаем username с @, если есть, иначе first_name
-function getUserName(user) {
-  return user.username ? '@' + user.username : user.first_name;
+// --- Универсальное получение имени пользователя ---
+function getUserName(input) {
+  const from = input?.from || input;
+  if (!from) return "Неизвестный пользователь";
+  const name = from.username ? `@${from.username}` : (from.first_name || "Без имени");
+  const id = from.id ? ` (id: ${from.id})` : "";
+  return name + id;
 }
 
 export function handleStart(bot, msg) {
@@ -71,6 +75,7 @@ export function handleCallback(bot, query) {
     }
 
     state = {
+      from: query.from,
       step: "enter_password",
       point: pointName,
       verified: false,
