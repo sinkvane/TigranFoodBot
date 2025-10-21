@@ -1,11 +1,11 @@
 import dotenv from "dotenv";
+dotenv.config();
 import { REMINDERS, POINTS } from "./reports.js";
 import { userState } from "./scripts/state.js";
 import { sendPendingReports } from "./scripts/reminders.js";
 import { log } from "./scripts/logger.js";
 import TelegramBot from "node-telegram-bot-api";
 
-dotenv.config();
 
 /**
  * === Пример использования ===

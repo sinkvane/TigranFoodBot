@@ -1,4 +1,5 @@
 import { REMINDERS, POINTS } from "../reports.js";
+import { removeDeployUser } from "./deployNotifier.js";
 import { config } from "../config.js";
 import { log } from "./logger.js";
 import { userState } from "./state.js";
@@ -24,7 +25,7 @@ export function sendPendingReports(bot, chatId) {
 
   if (!state.lastReminder) {
     if (state._pendingMessageId) {
-      bot.deleteMessage(chatId, state._pendingMessageId).catch(() => {});
+      bot.deleteMessage(chatId, state._pendingMessageId).catch(() => { });
       state._pendingMessageId = null;
     }
 
@@ -67,7 +68,7 @@ export function sendPendingReports(bot, chatId) {
  */
 function declension(count) {
   if (count % 10 === 1 && count % 100 !== 11) return "отчет";
-  if ([2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100)) return "отчета";
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) return "отчета";
   return "отчетов";
 }
 
@@ -149,7 +150,7 @@ export function scheduleReminders(bot, chatId, pointName) {
           state.startTime = null;
 
           if (state._pendingMessageId) {
-            try { delete state._pendingMessageId; } catch (_) {}
+            try { delete state._pendingMessageId; } catch (_) { }
           }
 
           const userName = getUserName(state);
@@ -177,13 +178,18 @@ export function scheduleReminders(bot, chatId, pointName) {
   });
 }
 
-// --- Автоматическое завершение забытых смен ---
-cron.schedule("0 * * * *", () => {
-  const now = Date.now();
+const MAX_PENDING_REPORTS = 1; 
+
+cron.schedule("*/5 * * * * *", () => {
   let endedCount = 0;
 
-  for (const [chatId, state] of Object.entries(userState)) {
-    if (state.startTime && (now - state.startTime) > 24 * 60 * 60 * 1000) {
+  for (const [chatIdStr, state] of Object.entries(userState)) {
+    if (!state || !state.verified) continue;
+
+    const pendingCount = state.pendingReminders?.length || 0;
+
+    if (pendingCount >= MAX_PENDING_REPORTS) {
+      // --- Чистим состояние пользователя ---
       state.pendingReminders = [];
       state.reportBuffer = [];
       state.verified = false;
@@ -192,15 +198,19 @@ cron.schedule("0 * * * *", () => {
       state._lastMsgId = null;
       state._contentAdded = false;
       state.startTime = null;
-      delete state._pendingMessageId;
+      if (state._pendingMessageId) delete state._pendingMessageId;
 
-      const userName = getUserName(state);
-      log(`[AUTO-END] Смена пользователя ${userName} завершена планировщиком (старше 24ч)`);
+      // --- Надёжный chatId как число ---
+      const realChatId = Number(state.from?.id ?? chatIdStr);
+
+      log(`[AUTO-END] Удалён пользователь ${realChatId} из Deploy`);
+      removeDeployUser(realChatId);
+
       endedCount++;
     }
   }
 
   if (endedCount === 0) {
-    log(`[AUTO-END] Нет пользователей со сменами старше 24 часов`);
+    log(`[AUTO-END] Нет пользователей с ${MAX_PENDING_REPORTS}+ неотправленными отчётами`);
   }
 }, { timezone: "Europe/Moscow" });

@@ -1,20 +1,20 @@
 export function getStartKeyboard() {
-  return { 
-    reply_markup: { 
-      keyboard: [[{ text: "/start" }]], 
-      resize_keyboard: true, 
-      one_time_keyboard: false 
-    } 
+  return {
+    reply_markup: {
+      keyboard: [[{ text: "/start" }]],
+      resize_keyboard: true,
+      one_time_keyboard: false
+    }
   };
 }
 
 export function getEndKeyboard() {
-  return { 
-    reply_markup: { 
-      keyboard: [[{ text: "✅ Завершить смену" }]], 
-      resize_keyboard: true, 
-      one_time_keyboard: false 
-    } 
+  return {
+    reply_markup: {
+      keyboard: [[{ text: "✅ Завершить смену" }]], // текст кнопки как у inline
+      resize_keyboard: true,
+      one_time_keyboard: false
+    }
   };
 }
 

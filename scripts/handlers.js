@@ -4,16 +4,16 @@ import { log } from "./logger.js";
 import { getStartKeyboard, getEndKeyboard, getFinishReportKeyboard } from "./keyboards.js";
 import { userState } from "./state.js";
 import { scheduleReminders, sendPendingReports } from "./reminders.js";
+import { addDeployUser, removeDeployUser } from "./deployNotifier.js";
 
 const { ADMIN_CHAT_ID } = config;
 
 function declension(count) {
   if (count % 10 === 1 && count % 100 !== 11) return "отчет";
-  if ([2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100)) return "отчета";
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) return "отчета";
   return "отчетов";
 }
 
-// --- Универсальное получение имени пользователя ---
 function getUserName(input) {
   const from = input?.from || input;
   if (!from) return "Неизвестный пользователь";
@@ -43,6 +43,9 @@ export function handleEnd(bot, msg) {
   const state = userState[chatId];
   const userName = getUserName(msg.from);
 
+  // ✅ удаляем пользователя из deploy-файла всегда
+  removeDeployUser(chatId);
+
   if (!state || !state.verified) {
     bot.sendMessage(chatId, "Смена не активна. Нажмите /start, чтобы начать смену.", getStartKeyboard());
     return;
@@ -56,9 +59,10 @@ export function handleEnd(bot, msg) {
   state._lastMsgId = null;
   state._contentAdded = false;
   state._pendingMessageId = null;
+  state.startTime = null;
 
   bot.sendMessage(chatId, "✅ Смена завершена. Нажмите /start для новой смены.", getStartKeyboard());
-  log(`Пользователь ${userName} завершил смену с помощью /end`);
+  log(`Пользователь ${userName} завершил смену`);
 }
 
 export function handleCallback(bot, query) {
@@ -74,19 +78,19 @@ export function handleCallback(bot, query) {
       return;
     }
 
-    state = {
-      from: query.from,
-      step: "enter_password",
-      point: pointName,
-      verified: false,
-      pendingReminders: [],
-      reportBuffer: [],
-      lastReminder: null,
-      _lastMsgId: null,
-      _contentAdded: false,
-      _pendingMessageId: null
-    };
-    userState[chatId] = state;
+    if (!state) userState[chatId] = state = {};
+
+    state.from = query.from;
+    state.step = "enter_password";
+    state.point = pointName;
+    state.verified = false;
+    state.pendingReminders = [];
+    state.reportBuffer = [];
+    state.lastReminder = null;
+    state._lastMsgId = null;
+    state._contentAdded = false;
+    state._pendingMessageId = null;
+    state.startTime = Date.now();
 
     bot.sendMessage(chatId, `Введите пароль для точки: ${pointName}`);
     bot.answerCallbackQuery(query.id);
@@ -106,6 +110,14 @@ export function handleCallback(bot, query) {
     bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте текст, фото или видео.`, getFinishReportKeyboard());
     bot.answerCallbackQuery(query.id);
     log(`Пользователь ${userName} выбрал отчет "${reminder.key}"`);
+    return;
+  }
+
+  // ✅ обработка кнопки завершения смены через inline
+  if (data === "end_shift") {
+    handleEnd(bot, { chat: { id: chatId }, from: query.from || query.message.from });
+    bot.answerCallbackQuery(query.id);
+    return;
   }
 
   if (data === "finish_report") {
@@ -146,6 +158,7 @@ export function handleCallback(bot, query) {
             }
           });
         }
+
         if (item.video) {
           item.video.forEach(f => {
             if (!sentFiles.has(f)) {
@@ -184,7 +197,12 @@ export function handleMessage(bot, msg) {
   if (!state) return;
   const userName = getUserName(msg.from);
 
-  // --- Проверка пароля ---
+  // --- проверка кнопки завершения смены ---
+  if (msg.text === "✅ Завершить смену") {
+    handleEnd(bot, msg); // удаляет из deploy, чистит state и отправляет сообщение
+    return;
+  }
+
   if (state.step === "enter_password") {
     const correctPassword = POINTS[state.point]?.password;
     if (!correctPassword) {
@@ -197,6 +215,8 @@ export function handleMessage(bot, msg) {
       state.step = "reports";
       bot.sendMessage(chatId, "Пароль верный! Теперь вы будете получать напоминания об отчетах.", getEndKeyboard());
       log(`Пользователь ${userName} авторизован для точки "${state.point}"`);
+
+      addDeployUser(chatId);
       scheduleReminders(bot, chatId, state.point);
     } else {
       bot.sendMessage(chatId, "Неверный пароль, попробуйте еще раз:");
@@ -205,7 +225,7 @@ export function handleMessage(bot, msg) {
     return;
   }
 
-  // --- Обработка отчетов ---
+  // --- остальная логика добавления контента в отчёты ---
   if (state.verified && state.lastReminder) {
     if (!state.reportBuffer) state.reportBuffer = [];
 
