@@ -105,7 +105,7 @@ export function handleCallback(bot, query) {
 
     bot.sendMessage(chatId, `Вы выбрали отчет: "${reminder.name}". Отправьте текст, фото или видео.`, getFinishReportKeyboard());
     bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${userName} выбрал отчет "${reminder.name}"`);
+    log(`Пользователь ${userName} выбрал отчет "${reminder.key}"`);
   }
 
   if (data === "finish_report") {
@@ -119,6 +119,9 @@ export function handleCallback(bot, query) {
       bot.answerCallbackQuery(query.id, { text: "Нет контента для отправки." });
       return;
     }
+
+    const reminder = REMINDERS.find(r => r.name === state.lastReminder);
+    const reminderKey = reminder ? reminder.key : "unknown";
 
     let combinedText = `Отчет "${state.lastReminder}" с точки ${state.point}\n\n`;
     itemsForReport.forEach(item => {
@@ -171,7 +174,7 @@ export function handleCallback(bot, query) {
     });
 
     bot.answerCallbackQuery(query.id);
-    log(`Пользователь ${userName} завершил отчет`);
+    log(`Пользователь ${userName} завершил отчет "${reminderKey}"`);
   }
 }
 
@@ -239,8 +242,10 @@ export function handleMessage(bot, msg) {
     }
 
     if (contentAddedNow) {
+      const reminder = REMINDERS.find(r => r.name === state.lastReminder);
+      const reminderKey = reminder ? reminder.key : "unknown";
       bot.sendMessage(chatId, "Контент добавлен в отчет. Когда закончите, нажмите «Завершить отчет».", getFinishReportKeyboard());
-      log(`Пользователь ${userName} добавил контент к отчету "${state.lastReminder}"`);
+      log(`Пользователь ${userName} добавил контент к отчету "${reminderKey}"`);
     }
   }
 }

@@ -11,7 +11,7 @@ export function getStartKeyboard() {
 export function getEndKeyboard() {
   return { 
     reply_markup: { 
-      keyboard: [[{ text: "/end" }]], 
+      keyboard: [[{ text: "✅ Завершить смену" }]], 
       resize_keyboard: true, 
       one_time_keyboard: false 
     } 
