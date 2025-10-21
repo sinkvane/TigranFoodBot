@@ -180,7 +180,7 @@ export function scheduleReminders(bot, chatId, pointName) {
 
 const MAX_PENDING_REPORTS = 1; 
 
-cron.schedule("*/5 * * * * *", () => {
+cron.schedule("0 * * * *", () => {
   let endedCount = 0;
 
   for (const [chatIdStr, state] of Object.entries(userState)) {

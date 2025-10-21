@@ -19,8 +19,8 @@ const FIVE = "30 21 * * *";
 
 export const REMINDERS = [
   // Тестовые отчеты с корректным cron
-  { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
-  { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: TWO, key: "appearance" }, // 9:00
+  // { name: "Фото и видео отчёт с рабочего места", cron: ONE, key: "workplace" },        // 8:30
+  // { name: "Фотоотчёт внешнего вида (спец.одежда и обувь)", cron: TWO, key: "appearance" }, // 9:00
   // { name: "Фото и видео отчёт о включении электроприборов", cron: MANY, key: "appliances" }, // 8:40
   // { name: "Фото и видео отчёт об открытии кассовой смены", cron: MANY, key: "cash_open" },   // 8:45
   // { name: "Фото и видео инвентаря на чистоту и наличие", cron: MANY, key: "inventory" },     // 8:45
