@@ -176,3 +176,31 @@ export function scheduleReminders(bot, chatId, pointName) {
     }
   });
 }
+
+// --- Автоматическое завершение забытых смен ---
+cron.schedule("0 * * * *", () => {
+  const now = Date.now();
+  let endedCount = 0;
+
+  for (const [chatId, state] of Object.entries(userState)) {
+    if (state.startTime && (now - state.startTime) > 24 * 60 * 60 * 1000) {
+      state.pendingReminders = [];
+      state.reportBuffer = [];
+      state.verified = false;
+      state.step = null;
+      state.lastReminder = null;
+      state._lastMsgId = null;
+      state._contentAdded = false;
+      state.startTime = null;
+      delete state._pendingMessageId;
+
+      const userName = getUserName(state);
+      log(`[AUTO-END] Смена пользователя ${userName} завершена планировщиком (старше 24ч)`);
+      endedCount++;
+    }
+  }
+
+  if (endedCount === 0) {
+    log(`[AUTO-END] Нет пользователей со сменами старше 24 часов`);
+  }
+}, { timezone: "Europe/Moscow" });
