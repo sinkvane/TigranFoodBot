@@ -27,7 +27,7 @@ function saveDeployUsers(ids) {
     fs.writeFileSync(FILE_PATH, JSON.stringify(ids, null, 2));
     log(`[DEPLOY] Список пользователей сохранён (${ids.length})`);
   } catch (err) {
-    log(`[DEPLOY] Ошибка сохранения списка пользователей: ${err.message}`);
+    log(`[DEPLOY] Ошибка при сохраненим списка пользователей: ${err.message}`);
   }
 }
 
