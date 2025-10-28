@@ -178,7 +178,7 @@ export function scheduleReminders(bot, chatId, pointName) {
   });
 }
 
-const MAX_PENDING_REPORTS = 1; 
+const MAX_PENDING_REPORTS = 12; 
 
 cron.schedule("0 * * * *", () => {
   let endedCount = 0;
