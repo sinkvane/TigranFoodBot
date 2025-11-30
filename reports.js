@@ -9,6 +9,7 @@ export const POINTS = {
   "ул. Нуркина 57/1": { password: process.env.POINT_NURKINA_57_1, tz: "KZ", type: "24h" },
   "ул. Бекхожина 1/1": { password: process.env.POINT_BEKHOZHINA_1_1, tz: "KZ", type: "24h" },
   "ул. Нурмагамбетова 102": { password: process.env.POINT_NURMAGAMBETOVA_102, tz: "KZ", type: "24h" },
+  "ул. Машхур Жусупа 13а": { password: process.env.POINT_MAHUR_ZHUSUPA_13A, tz: "KZ", type: "24h" },
 };
 
 const MANY = "38 21 * * *";
